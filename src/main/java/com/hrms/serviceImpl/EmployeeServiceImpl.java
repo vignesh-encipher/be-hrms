@@ -4,6 +4,7 @@ import com.hrms.dto.EmployeeDto;
 import com.hrms.entity.Department;
 import com.hrms.entity.Designation;
 import com.hrms.entity.Employee;
+import com.hrms.exception.BadRequestException;
 import com.hrms.exception.ResourceNotFoundException;
 import com.hrms.repository.DepartmentRepository;
 import com.hrms.repository.DesignationRepository;
@@ -137,6 +138,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public EmployeeDto createEmployee(EmployeeDto employeeDto) {
+        if (employeeDto.getEmail() != null && !employeeDto.getEmail().isEmpty()) {
+            if (employeeRepository.findByEmail(employeeDto.getEmail()).isPresent()) {
+                throw new BadRequestException("Error: Email is already in use!");
+            }
+        }
         Employee employee = convertToEntity(employeeDto);
         if (employee.getEmployeeId() == null || employee.getEmployeeId().isEmpty()) {
             long count = employeeRepository.count();
@@ -150,6 +156,13 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto updateEmployee(String id, EmployeeDto employeeDto) {
         Employee existing = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        
+        if (employeeDto.getEmail() != null && !employeeDto.getEmail().isEmpty()
+                && !employeeDto.getEmail().equalsIgnoreCase(existing.getEmail())) {
+            if (employeeRepository.findByEmail(employeeDto.getEmail()).isPresent()) {
+                throw new BadRequestException("Error: Email is already in use!");
+            }
+        }
         
         existing.setFirstName(employeeDto.getFirstName());
         existing.setLastName(employeeDto.getLastName());
