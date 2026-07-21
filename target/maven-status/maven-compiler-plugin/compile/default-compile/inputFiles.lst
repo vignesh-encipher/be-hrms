@@ -22,6 +22,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/RegisterRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshResponse.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/ApprovalAuditLog.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Attendance.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/CompOffRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Department.java

@@ -25,10 +25,25 @@ public class LeaveRequest {
     private Double numberOfDays;
     private String reason;
     
-    private String status; // Pending, Approved, Rejected
-    private String managerStatus; // Pending, Approved, Rejected
-    private String hrStatus; // Pending, Approved, Rejected
+    private String status; // Pending Level 1 - [Role], Pending Level 2 - [Role], Approved, Rejected
     
-    private String managerRemarks;
-    private String hrRemarks;
+    private Integer totalLevels; // 1 or 2
+    private Integer currentLevel; // 1 or 2
+    
+    private String level1ApproverId;
+    private String level1ApproverName;
+    private String level1Role; // e.g. MANAGER
+    private String level1Status; // Pending, Approved, Rejected
+    private String level1Remarks;
+
+    private String level2ApproverId;
+    private String level2ApproverName;
+    private String level2Role; // e.g. HR
+    private String level2Status; // Pending, Approved, Rejected
+    private String level2Remarks;
+
+    @Builder.Default
+    private java.util.List<ApprovalAuditLog> auditLogs = new java.util.ArrayList<>();
 }
+
+

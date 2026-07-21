@@ -34,6 +34,8 @@ com/hrms/entity/RefreshToken.class
 com/hrms/controller/EmployeeController.class
 com/hrms/service/DepartmentService.class
 com/hrms/security/jwt/AuthTokenFilter.class
+com/hrms/entity/ApprovalAuditLog.class
+com/hrms/entity/ApprovalAuditLog$ApprovalAuditLogBuilder.class
 com/hrms/security/services/RefreshTokenService.class
 com/hrms/dto/OrgTreeUpdateRequest.class
 com/hrms/serviceImpl/HolidayServiceImpl.class
