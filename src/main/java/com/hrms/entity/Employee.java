@@ -36,6 +36,7 @@ public class Employee {
     private String departmentId;
     private String designationId;
     private String managerId; // employeeId of manager
+    private String hrApproverId; // employeeId of HR approver
 
     private LocalDate joiningDate;
     private String employmentType; // Full Time, Part Time, Contract, Intern

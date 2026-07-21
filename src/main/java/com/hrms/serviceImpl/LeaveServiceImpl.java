@@ -27,7 +27,7 @@ public class LeaveServiceImpl implements LeaveService {
         
         long days = ChronoUnit.DAYS.between(leaveRequest.getStartDate(), leaveRequest.getEndDate()) + 1;
         leaveRequest.setNumberOfDays((double) days);
-        leaveRequest.setStatus("Pending");
+        leaveRequest.setStatus("Pending Manager");
         leaveRequest.setManagerStatus("Pending");
         leaveRequest.setHrStatus("Pending");
         
@@ -39,18 +39,31 @@ public class LeaveServiceImpl implements LeaveService {
         LeaveRequest leaveRequest = leaveRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave request not found with id: " + id));
 
-        if ("MANAGER".equalsIgnoreCase(role) || "ROLE_MANAGER".equalsIgnoreCase(role)) {
+        boolean isSuperAdmin = "SUPER_ADMIN".equalsIgnoreCase(role) || "ROLE_SUPER_ADMIN".equalsIgnoreCase(role);
+        boolean isHR = "HR".equalsIgnoreCase(role) || "ROLE_HR".equalsIgnoreCase(role);
+        boolean isManager = "MANAGER".equalsIgnoreCase(role) || "ROLE_MANAGER".equalsIgnoreCase(role);
+
+        if (isManager) {
             leaveRequest.setManagerStatus("Approved");
             leaveRequest.setManagerRemarks(remarks);
-            // If HR also approved or HR status is not pending, or if it is already approved by HR
-            if ("Approved".equals(leaveRequest.getHrStatus())) {
+            // Move to HR stage
+            if (!"Approved".equalsIgnoreCase(leaveRequest.getHrStatus())) {
+                leaveRequest.setStatus("Pending HR");
+            } else {
                 leaveRequest.setStatus("Approved");
             }
-        } else if ("HR".equalsIgnoreCase(role) || "ROLE_HR".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role) || "ROLE_SUPER_ADMIN".equalsIgnoreCase(role)) {
+        } else if (isHR || isSuperAdmin) {
             leaveRequest.setHrStatus("Approved");
             leaveRequest.setHrRemarks(remarks);
-            // HR approval is final or works alongside Manager approval
-            leaveRequest.setStatus("Approved");
+            // Super Admin can approve both stages at once if needed
+            if (isSuperAdmin && !"Approved".equalsIgnoreCase(leaveRequest.getManagerStatus())) {
+                leaveRequest.setManagerStatus("Approved");
+            }
+            if ("Approved".equalsIgnoreCase(leaveRequest.getManagerStatus()) || isSuperAdmin) {
+                leaveRequest.setStatus("Approved");
+            } else {
+                leaveRequest.setStatus("Pending Manager");
+            }
         }
 
         return leaveRequestRepository.save(leaveRequest);
@@ -61,7 +74,9 @@ public class LeaveServiceImpl implements LeaveService {
         LeaveRequest leaveRequest = leaveRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave request not found with id: " + id));
 
-        if ("MANAGER".equalsIgnoreCase(role) || "ROLE_MANAGER".equalsIgnoreCase(role)) {
+        boolean isManager = "MANAGER".equalsIgnoreCase(role) || "ROLE_MANAGER".equalsIgnoreCase(role);
+
+        if (isManager) {
             leaveRequest.setManagerStatus("Rejected");
             leaveRequest.setManagerRemarks(remarks);
         } else {
@@ -85,21 +100,22 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Override
     public List<LeaveRequest> getPendingLeaveRequests() {
-        return leaveRequestRepository.findByStatus("Pending");
+        return leaveRequestRepository.findAll().stream()
+                .filter(l -> "Pending Manager".equalsIgnoreCase(l.getStatus()) || "Pending HR".equalsIgnoreCase(l.getStatus()) || "Pending".equalsIgnoreCase(l.getStatus()))
+                .toList();
     }
 
     @Override
     public Map<String, Double> getLeaveBalance(String employeeId) {
-        // Default allocations
         Map<String, Double> balance = new HashMap<>();
         balance.put("Casual Leave", 12.0);
-        balance.put("Sick Leave", 10.0);
-        balance.put("Paid Leave", 15.0);
-        balance.put("Maternity Leave", 90.0);
-        balance.put("Loss of Pay", 30.0);
+        balance.put("Sick Leave", 8.0);
+        balance.put("Earned Leave", 15.0);
+        balance.put("Maternity Leave", 180.0);
+        balance.put("Loss of Pay", 365.0);
 
         List<LeaveRequest> approvedLeaves = leaveRequestRepository.findByEmployeeId(employeeId).stream()
-                .filter(l -> "Approved".equals(l.getStatus()))
+                .filter(l -> "Approved".equalsIgnoreCase(l.getStatus()))
                 .toList();
 
         for (LeaveRequest request : approvedLeaves) {

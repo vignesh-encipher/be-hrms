@@ -2,6 +2,7 @@ com/hrms/entity/Department.class
 com/hrms/service/EmployeeService.class
 com/hrms/security/WebSecurityConfig.class
 com/hrms/entity/Designation$DesignationBuilder.class
+com/hrms/controller/OrganizationController.class
 com/hrms/service/DesignationService.class
 com/hrms/exception/BadRequestException.class
 com/hrms/service/DashboardService.class
@@ -13,9 +14,11 @@ com/hrms/dto/LoginRequest.class
 com/hrms/dto/EmployeeDto$EmployeeDtoBuilder.class
 com/hrms/entity/Attendance$AttendanceBuilder.class
 com/hrms/entity/ERole.class
+com/hrms/dto/OrgTreeNodeDto.class
 com/hrms/entity/RefreshToken$RefreshTokenBuilder.class
 com/hrms/entity/Attendance.class
 com/hrms/entity/LeaveType$LeaveTypeBuilder.class
+com/hrms/dto/OrgTreeUpdateRequest$OrgTreeUpdateRequestBuilder.class
 com/hrms/config/DatabaseSeeder.class
 com/hrms/service/AttendanceService.class
 com/hrms/exception/TokenRefreshException.class
@@ -32,6 +35,7 @@ com/hrms/controller/EmployeeController.class
 com/hrms/service/DepartmentService.class
 com/hrms/security/jwt/AuthTokenFilter.class
 com/hrms/security/services/RefreshTokenService.class
+com/hrms/dto/OrgTreeUpdateRequest.class
 com/hrms/serviceImpl/HolidayServiceImpl.class
 com/hrms/exception/ResourceNotFoundException.class
 com/hrms/dto/JwtResponse.class
@@ -62,6 +66,7 @@ com/hrms/entity/User$UserBuilder.class
 com/hrms/security/services/UserDetailsServiceImpl.class
 com/hrms/repository/LeaveRequestRepository.class
 com/hrms/dto/TokenRefreshResponse.class
+com/hrms/dto/OrgTreeNodeDto$OrgTreeNodeDtoBuilder.class
 com/hrms/entity/Holiday.class
 com/hrms/serviceImpl/PayrollServiceImpl.class
 com/hrms/repository/HolidayRepository.class

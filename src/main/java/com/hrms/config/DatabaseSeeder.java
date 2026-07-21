@@ -68,6 +68,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .joiningDate(LocalDate.now().minusYears(2))
                         .employmentType("Full Time")
                         .salary(15000.00)
+                        .hrApproverId("EMP-002")
                         .userId(adminUser.getId())
                         .build();
                 employeeRepository.save(adminEmp);
@@ -94,6 +95,8 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .joiningDate(LocalDate.now().minusYears(1))
                         .employmentType("Full Time")
                         .salary(9000.00)
+                        .managerId("EMP-001")
+                        .hrApproverId("EMP-002")
                         .userId(hrUser.getId())
                         .build();
                 employeeRepository.save(hrEmp);
@@ -120,6 +123,8 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .joiningDate(LocalDate.now().minusYears(3))
                         .employmentType("Full Time")
                         .salary(12000.00)
+                        .managerId("EMP-001")
+                        .hrApproverId("EMP-002")
                         .userId(managerUser.getId())
                         .build();
                 employeeRepository.save(managerEmp);
@@ -147,6 +152,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .employmentType("Full Time")
                         .salary(6000.00)
                         .managerId("EMP-003")
+                        .hrApproverId("EMP-002")
                         .userId(employeeUser.getId())
                         .build();
                 employeeRepository.save(emp);

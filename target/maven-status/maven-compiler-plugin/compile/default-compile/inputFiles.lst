@@ -11,11 +11,14 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/HolidayController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/LeaveController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/LeaveSettingsController.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/OrganizationController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/PayrollController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/DashboardStatsDto.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/EmployeeDto.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/JwtResponse.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/LoginRequest.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/OrgTreeNodeDto.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/OrgTreeUpdateRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/RegisterRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshResponse.java
