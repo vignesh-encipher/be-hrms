@@ -1,7 +1,7 @@
 package com.hrms.security.services;
 
-import com.hrms.entity.User;
-import com.hrms.repository.UserRepository;
+import com.hrms.entity.Employee;
+import com.hrms.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -11,14 +11,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
     @Autowired
-    private UserRepository userRepository;
+    private EmployeeRepository employeeRepository;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .or(() -> userRepository.findByEmail(username))
-                .orElseThrow(() -> new UsernameNotFoundException("User Not Found with username or email: " + username));
+        Employee employee = employeeRepository.findByEmail(username)
+                .or(() -> employeeRepository.findByEmployeeId(username))
+                .orElseThrow(() -> new UsernameNotFoundException("Employee Not Found with email or employeeId: " + username));
 
-        return UserDetailsImpl.build(user);
+        return UserDetailsImpl.build(employee);
     }
 }

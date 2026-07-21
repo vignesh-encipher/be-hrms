@@ -14,7 +14,8 @@ import java.util.Optional;
 public interface EmployeeRepository extends MongoRepository<Employee, String> {
     Optional<Employee> findByEmployeeId(String employeeId);
     Optional<Employee> findByEmail(String email);
-    Optional<Employee> findByUserId(String userId);
+    Boolean existsByEmail(String email);
+    Boolean existsByEmployeeId(String employeeId);
     List<Employee> findByManagerId(String managerId);
     
     @Query("{ '$or': [ { 'firstName': { $regex: ?0, $options: 'i' } }, { 'lastName': { $regex: ?0, $options: 'i' } }, { 'employeeId': { $regex: ?0, $options: 'i' } }, { 'email': { $regex: ?0, $options: 'i' } } ] }")

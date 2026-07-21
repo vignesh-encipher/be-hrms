@@ -4,10 +4,8 @@ import com.hrms.dto.*;
 import com.hrms.entity.ERole;
 import com.hrms.entity.Employee;
 import com.hrms.entity.RefreshToken;
-import com.hrms.entity.User;
 import com.hrms.exception.BadRequestException;
 import com.hrms.repository.EmployeeRepository;
-import com.hrms.repository.UserRepository;
 import com.hrms.security.jwt.JwtUtils;
 import com.hrms.security.services.RefreshTokenService;
 import com.hrms.security.services.UserDetailsImpl;
@@ -33,9 +31,6 @@ import java.util.stream.Collectors;
 public class AuthController {
     @Autowired
     private AuthenticationManager authenticationManager;
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -64,8 +59,7 @@ public class AuthController {
 
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getId());
 
-        // Attempt to find associated employee record
-        Optional<Employee> emp = employeeRepository.findByUserId(userDetails.getId());
+        Optional<Employee> emp = employeeRepository.findById(userDetails.getId());
         String employeeId = emp.isPresent() ? emp.get().getEmployeeId() : null;
 
         return ResponseEntity.ok(JwtResponse.builder()
@@ -81,20 +75,9 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest signUpRequest) {
-        if (userRepository.existsByUsername(signUpRequest.getUsername())) {
-            return ResponseEntity.badRequest().body("Error: Username is already taken!");
-        }
-
-        if (userRepository.existsByEmail(signUpRequest.getEmail())) {
+        if (employeeRepository.existsByEmail(signUpRequest.getEmail())) {
             return ResponseEntity.badRequest().body("Error: Email is already in use!");
         }
-
-        // Create new user's account
-        User user = User.builder()
-                .username(signUpRequest.getUsername())
-                .email(signUpRequest.getEmail())
-                .password(encoder.encode(signUpRequest.getPassword()))
-                .build();
 
         Set<String> strRoles = signUpRequest.getRoles();
         Set<ERole> roles = new HashSet<>();
@@ -122,22 +105,20 @@ public class AuthController {
             });
         }
 
-        user.setRoles(roles);
-        User savedUser = userRepository.save(user);
-
-        // Seed basic Employee profile linked to this User
+        long count = employeeRepository.count();
         Employee employee = Employee.builder()
-                .employeeId("EMP-" + savedUser.getId().substring(Math.max(0, savedUser.getId().length() - 5)))
-                .firstName(savedUser.getUsername())
-                .lastName("User")
-                .email(savedUser.getEmail())
+                .employeeId(String.format("EMP-%03d", count + 1))
+                .firstName(signUpRequest.getUsername())
+                .lastName("Employee")
+                .email(signUpRequest.getEmail())
+                .password(encoder.encode(signUpRequest.getPassword()))
+                .roles(roles)
                 .status("Active")
                 .employmentType("Full Time")
-                .userId(savedUser.getId())
                 .build();
-        employeeRepository.save(employee);
 
-        return ResponseEntity.ok("User registered successfully!");
+        employeeRepository.save(employee);
+        return ResponseEntity.ok("Employee registered successfully!");
     }
 
     @PostMapping("/refresh")
@@ -148,9 +129,10 @@ public class AuthController {
                 .map(refreshTokenService::verifyExpiration)
                 .map(RefreshToken::getUserId)
                 .map(userId -> {
-                    User user = userRepository.findById(userId)
-                            .orElseThrow(() -> new BadRequestException("User not found: " + userId));
-                    String token = jwtUtils.generateTokenFromUsername(user.getUsername());
+                    Employee employee = employeeRepository.findById(userId)
+                            .orElseThrow(() -> new BadRequestException("Employee not found: " + userId));
+                    String tokenIdentifier = employee.getEmail() != null ? employee.getEmail() : employee.getEmployeeId();
+                    String token = jwtUtils.generateTokenFromUsername(tokenIdentifier);
                     return ResponseEntity.ok(new TokenRefreshResponse(token, requestRefreshToken));
                 })
                 .orElseThrow(() -> new BadRequestException("Refresh token is not in database!"));

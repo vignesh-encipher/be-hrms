@@ -1,7 +1,7 @@
 package com.hrms.security.services;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.hrms.entity.User;
+import com.hrms.entity.Employee;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,16 +32,20 @@ public class UserDetailsImpl implements UserDetails {
         this.authorities = authorities;
     }
 
-    public static UserDetailsImpl build(User user) {
-        List<GrantedAuthority> authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority(role.name()))
-                .collect(Collectors.toList());
+    public static UserDetailsImpl build(Employee employee) {
+        List<GrantedAuthority> authorities = employee.getRoles() != null
+                ? employee.getRoles().stream()
+                    .map(role -> new SimpleGrantedAuthority(role.name()))
+                    .collect(Collectors.toList())
+                : java.util.Collections.emptyList();
+
+        String userIdentifier = employee.getEmail() != null ? employee.getEmail() : employee.getEmployeeId();
 
         return new UserDetailsImpl(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getPassword(),
+                employee.getId(),
+                userIdentifier,
+                employee.getEmail(),
+                employee.getPassword(),
                 authorities);
     }
 

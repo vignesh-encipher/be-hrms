@@ -39,4 +39,9 @@ public class EmployeeDto {
     private String status;
     private String photo;
     private String userId;
+    
+    // Account creation fields
+    private String password;
+    private String role;
 }
+

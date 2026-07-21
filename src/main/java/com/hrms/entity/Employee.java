@@ -46,6 +46,10 @@ public class Employee {
     private String status; // Active, Terminated, Resigned, On Leave
     private String photo; // base64 or URL
 
-    // Reference to User ID for auth link
-    private String userId;
+    // Authentication & Security credentials stored directly on Employee
+    private String password;
+    
+    @Builder.Default
+    private java.util.Set<ERole> roles = new java.util.HashSet<>();
 }
+

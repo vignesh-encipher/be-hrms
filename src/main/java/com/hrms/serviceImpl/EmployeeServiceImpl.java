@@ -52,7 +52,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .emergencyContact(employee.getEmergencyContact())
                 .status(employee.getStatus())
                 .photo(employee.getPhoto())
-                .userId(employee.getUserId())
+                .role(employee.getRoles() != null && !employee.getRoles().isEmpty()
+                        ? employee.getRoles().iterator().next().name()
+                        : "ROLE_EMPLOYEE")
                 .build();
 
         // Resolve names
@@ -93,7 +95,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .emergencyContact(dto.getEmergencyContact())
                 .status(dto.getStatus())
                 .photo(dto.getPhoto())
-                .userId(dto.getUserId())
                 .build();
     }
 
@@ -131,19 +132,66 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public EmployeeDto getEmployeeByUserId(String userId) {
-        Employee employee = employeeRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with userId: " + userId));
+        Employee employee = employeeRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + userId));
         return convertToDto(employee);
+    }
+
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 8) {
+            throw new BadRequestException("Password must be at least 8 characters long!");
+        }
+        if (!password.matches(".*[A-Z].*")) {
+            throw new BadRequestException("Password must contain at least one uppercase letter!");
+        }
+        if (!password.matches(".*[a-z].*")) {
+            throw new BadRequestException("Password must contain at least one lowercase letter!");
+        }
+        if (!password.matches(".*[0-9].*")) {
+            throw new BadRequestException("Password must contain at least one number!");
+        }
+        if (!password.matches(".*[!@#$%^&*(),.?\"':{}|<>].*")) {
+            throw new BadRequestException("Password must contain at least one special character!");
+        }
     }
 
     @Override
     public EmployeeDto createEmployee(EmployeeDto employeeDto) {
-        if (employeeDto.getEmail() != null && !employeeDto.getEmail().isEmpty()) {
-            if (employeeRepository.findByEmail(employeeDto.getEmail()).isPresent()) {
-                throw new BadRequestException("Error: Email is already in use!");
+        if (employeeDto.getEmail() == null || employeeDto.getEmail().trim().isEmpty()) {
+            throw new BadRequestException("Error: Email Address is required!");
+        }
+
+        String email = employeeDto.getEmail().trim();
+
+        if (employeeRepository.findByEmail(email).isPresent()) {
+            throw new BadRequestException("Error: Email is already in use!");
+        }
+
+        validatePassword(employeeDto.getPassword());
+
+        // Parse role
+        com.hrms.entity.ERole roleEnum = com.hrms.entity.ERole.ROLE_EMPLOYEE;
+        if (employeeDto.getRole() != null && !employeeDto.getRole().isEmpty()) {
+            String r = employeeDto.getRole().toUpperCase();
+            if (r.contains("SUPER") || r.contains("SUPER_ADMIN")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_SUPER_ADMIN;
+            } else if (r.contains("HR")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_HR;
+            } else if (r.contains("MANAGER")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_MANAGER;
+            } else if (r.contains("EMPLOYEE")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_EMPLOYEE;
             }
         }
+
         Employee employee = convertToEntity(employeeDto);
+        employee.setEmail(email);
+        employee.setPassword(passwordEncoder.encode(employeeDto.getPassword()));
+        employee.setRoles(java.util.Set.of(roleEnum));
+
         if (employee.getEmployeeId() == null || employee.getEmployeeId().isEmpty()) {
             long count = employeeRepository.count();
             employee.setEmployeeId(String.format("EMP-%03d", count + 1));
