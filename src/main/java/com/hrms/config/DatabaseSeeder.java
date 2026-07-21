@@ -36,6 +36,12 @@ public class DatabaseSeeder implements CommandLineRunner {
     private PayrollRepository payrollRepository;
 
     @Autowired
+    private LeaveTypeRepository leaveTypeRepository;
+
+    @Autowired
+    private CompOffRepository compOffRepository;
+
+    @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
@@ -43,25 +49,34 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Clear all existing data in database for a fresh start
+        // Clear ALL existing collections in MongoDB database
         employeeRepository.deleteAll();
         departmentRepository.deleteAll();
         designationRepository.deleteAll();
         holidayRepository.deleteAll();
         attendanceRepository.deleteAll();
         leaveRequestRepository.deleteAll();
+        leaveTypeRepository.deleteAll();
+        compOffRepository.deleteAll();
         payrollRepository.deleteAll();
         refreshTokenRepository.deleteAll();
 
         // 1. Seed Departments & Designations
-        Department eng = departmentRepository.save(Department.builder().name("Engineering").code("ENG").description("Tech and Development").build());
-        Department hrDept = departmentRepository.save(Department.builder().name("Human Resources").code("HR").description("Talent Acquisition and Relations").build());
-        Department sales = departmentRepository.save(Department.builder().name("Sales").code("SLS").description("Customer Acquisition").build());
+        Department eng = departmentRepository
+                .save(Department.builder().name("Engineering").code("ENG").description("Tech and Development").build());
+        Department hrDept = departmentRepository.save(Department.builder().name("Human Resources").code("HR")
+                .description("Talent Acquisition and Relations").build());
+        Department sales = departmentRepository
+                .save(Department.builder().name("Sales").code("SLS").description("Customer Acquisition").build());
 
-        Designation devDesg = designationRepository.save(Designation.builder().title("Software Engineer").departmentId(eng.getId()).description("Devs").build());
-        Designation srDevDesg = designationRepository.save(Designation.builder().title("Senior Software Engineer").departmentId(eng.getId()).description("Lead Devs").build());
-        Designation hrDesg = designationRepository.save(Designation.builder().title("HR Specialist").departmentId(hrDept.getId()).description("Relations").build());
-        Designation salesDesg = designationRepository.save(Designation.builder().title("Sales Executive").departmentId(sales.getId()).description("Sales staff").build());
+        Designation devDesg = designationRepository.save(
+                Designation.builder().title("Software Engineer").departmentId(eng.getId()).description("Devs").build());
+        Designation srDevDesg = designationRepository.save(Designation.builder().title("Senior Software Engineer")
+                .departmentId(eng.getId()).description("Lead Devs").build());
+        Designation hrDesg = designationRepository.save(Designation.builder().title("HR Specialist")
+                .departmentId(hrDept.getId()).description("Relations").build());
+        Designation salesDesg = designationRepository.save(Designation.builder().title("Sales Executive")
+                .departmentId(sales.getId()).description("Sales staff").build());
 
         String defaultPassword = encoder.encode("Password@123");
 
@@ -137,8 +152,11 @@ public class DatabaseSeeder implements CommandLineRunner {
         employeeRepository.save(emp);
 
         // 6. Seed Holidays
-        holidayRepository.save(Holiday.builder().name("New Year's Day").date(LocalDate.of(2026, 1, 1)).isrestricted(false).build());
-        holidayRepository.save(Holiday.builder().name("Independence Day").date(LocalDate.of(2026, 7, 4)).isrestricted(false).build());
-        holidayRepository.save(Holiday.builder().name("Christmas Day").date(LocalDate.of(2026, 12, 25)).isrestricted(false).build());
+        holidayRepository.save(
+                Holiday.builder().name("New Year's Day").date(LocalDate.of(2026, 1, 1)).isrestricted(false).build());
+        holidayRepository.save(
+                Holiday.builder().name("Independence Day").date(LocalDate.of(2026, 7, 4)).isrestricted(false).build());
+        holidayRepository.save(
+                Holiday.builder().name("Christmas Day").date(LocalDate.of(2026, 12, 25)).isrestricted(false).build());
     }
 }

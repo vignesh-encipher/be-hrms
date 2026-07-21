@@ -3,7 +3,6 @@ package com.hrms.security.services;
 import com.hrms.entity.RefreshToken;
 import com.hrms.exception.TokenRefreshException;
 import com.hrms.repository.RefreshTokenRepository;
-import com.hrms.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

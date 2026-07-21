@@ -33,7 +33,6 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/LeaveType.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Payroll.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/RefreshToken.java
-/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/User.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/exception/BadRequestException.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/exception/GlobalExceptionHandler.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/exception/ResourceNotFoundException.java
@@ -48,7 +47,6 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/LeaveTypeRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/PayrollRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/RefreshTokenRepository.java
-/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/UserRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/WebSecurityConfig.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/jwt/AuthEntryPointJwt.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/jwt/AuthTokenFilter.java

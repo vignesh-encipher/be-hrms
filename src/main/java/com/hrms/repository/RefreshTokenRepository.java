@@ -1,7 +1,6 @@
 package com.hrms.repository;
 
 import com.hrms.entity.RefreshToken;
-import com.hrms.entity.User;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 

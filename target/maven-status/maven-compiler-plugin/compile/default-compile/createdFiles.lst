@@ -53,7 +53,6 @@ com/hrms/repository/PayrollRepository.class
 com/hrms/serviceImpl/AttendanceServiceImpl.class
 com/hrms/entity/Employee$EmployeeBuilder.class
 com/hrms/repository/DesignationRepository.class
-com/hrms/repository/UserRepository.class
 com/hrms/repository/EmployeeRepository.class
 com/hrms/entity/Employee.class
 com/hrms/security/jwt/AuthEntryPointJwt.class
@@ -62,7 +61,6 @@ com/hrms/entity/Payroll$PayrollBuilder.class
 com/hrms/dto/DashboardStatsDto$DashboardStatsDtoBuilder.class
 com/hrms/serviceImpl/LeaveServiceImpl.class
 com/hrms/controller/CompOffController.class
-com/hrms/entity/User$UserBuilder.class
 com/hrms/security/services/UserDetailsServiceImpl.class
 com/hrms/repository/LeaveRequestRepository.class
 com/hrms/dto/TokenRefreshResponse.class
@@ -73,7 +71,6 @@ com/hrms/repository/HolidayRepository.class
 com/hrms/controller/PayrollController.class
 com/hrms/serviceImpl/DashboardServiceImpl.class
 com/hrms/config/OpenApiConfig.class
-com/hrms/entity/User.class
 com/hrms/entity/LeaveRequest.class
 com/hrms/repository/CompOffRepository.class
 com/hrms/entity/Payroll.class
