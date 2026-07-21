@@ -32,6 +32,7 @@ public class EmployeeDto {
     private String managerName; // Resolved full name
     
     private LocalDate joiningDate;
+    private LocalDate resignationDate;
     private String employmentType;
     private Double salary;
     private String address;

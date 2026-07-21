@@ -39,6 +39,7 @@ public class Employee {
     private String hrApproverId; // employeeId of HR approver
 
     private LocalDate joiningDate;
+    private LocalDate resignationDate;
     private String employmentType; // Full Time, Part Time, Contract, Intern
     private Double salary;
     private String address;
