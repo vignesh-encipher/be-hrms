@@ -254,9 +254,20 @@ public class LeaveServiceImpl implements LeaveService {
         return leaveRequestRepository.save(leaveRequest);
     }
 
+    private List<LeaveRequest> sortLeavesDescending(List<LeaveRequest> list) {
+        List<LeaveRequest> mutableList = new ArrayList<>(list);
+        mutableList.sort((a, b) -> {
+            if (b.getStartDate() == null && a.getStartDate() == null) return 0;
+            if (b.getStartDate() == null) return -1;
+            if (a.getStartDate() == null) return 1;
+            return b.getStartDate().compareTo(a.getStartDate());
+        });
+        return mutableList;
+    }
+
     @Override
     public List<LeaveRequest> getLeaveHistory(String employeeId) {
-        return leaveRequestRepository.findByEmployeeId(employeeId);
+        return sortLeavesDescending(leaveRequestRepository.findByEmployeeId(employeeId));
     }
 
     @Override
@@ -273,27 +284,28 @@ public class LeaveServiceImpl implements LeaveService {
         List<LeaveRequest> allLeaves = leaveRequestRepository.findAll();
 
         if (currentEmployee == null) {
-            return allLeaves;
+            return sortLeavesDescending(allLeaves);
         }
 
         boolean isHR = currentEmployee.getRoles() != null && currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_HR);
         boolean isSuperAdmin = currentEmployee.getRoles() != null && currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
 
         if (isHR || isSuperAdmin) {
-            return allLeaves; // HR/Admin see all leave requests
+            return sortLeavesDescending(allLeaves); // HR/Admin see all leave requests
         }
 
         // For regular employees and managers: only see requests they submitted OR where they are L1 or L2 approver
         String empId = currentEmployee.getEmployeeId();
         String email = currentEmployee.getEmail();
 
-        return allLeaves.stream()
+        List<LeaveRequest> filtered = allLeaves.stream()
                 .filter(l -> empId.equals(l.getEmployeeId())
                           || empId.equals(l.getLevel1ApproverId()) 
                           || (email != null && email.equals(l.getLevel1ApproverId()))
                           || empId.equals(l.getLevel2ApproverId()) 
                           || (email != null && email.equals(l.getLevel2ApproverId())))
                 .toList();
+        return sortLeavesDescending(filtered);
     }
 
     @Override
@@ -312,24 +324,25 @@ public class LeaveServiceImpl implements LeaveService {
                 .toList();
 
         if (currentEmployee == null) {
-            return allPending;
+            return sortLeavesDescending(allPending);
         }
 
         boolean isHR = currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_HR);
         boolean isSuperAdmin = currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
 
         if (isHR || isSuperAdmin) {
-            return allPending; // HR/Admin see all pending requests
+            return sortLeavesDescending(allPending); // HR/Admin see all pending requests
         }
 
         // For regular employees and managers: only see requests where they are L1 or L2 approver
         String empId = currentEmployee.getEmployeeId();
         String email = currentEmployee.getEmail();
 
-        return allPending.stream()
+        List<LeaveRequest> filtered = allPending.stream()
                 .filter(l -> (l.getCurrentLevel() == 1 && (empId.equals(l.getLevel1ApproverId()) || (email != null && email.equals(l.getLevel1ApproverId()))))
                           || (l.getCurrentLevel() == 2 && (empId.equals(l.getLevel2ApproverId()) || (email != null && email.equals(l.getLevel2ApproverId())))))
                 .toList();
+        return sortLeavesDescending(filtered);
     }
 
     @Override

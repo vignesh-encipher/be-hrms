@@ -49,7 +49,35 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .findFirst()
                 .orElseThrow(() -> new BadRequestException("No active clock-in record found for today. Please clock in first."));
 
-        activeRecord.setClockOut(LocalTime.now());
+        LocalTime outTime = LocalTime.now();
+        activeRecord.setClockOut(outTime);
+
+        // Sum up total minutes worked today
+        long totalMinutes = 0;
+        for (Attendance r : existing) {
+            LocalTime in = r.getClockIn();
+            LocalTime out = r.getClockOut();
+            if (r.getId() != null && r.getId().equals(activeRecord.getId())) {
+                out = outTime;
+            }
+            if (in != null && out != null) {
+                java.time.Duration duration = java.time.Duration.between(in, out);
+                totalMinutes += duration.toMinutes();
+            }
+        }
+
+        // Min 7 hours (420 minutes) is Present, otherwise Absent
+        String newStatus = totalMinutes >= 420 ? "Present" : "Absent";
+
+        // Update all other records of today to have the same aggregated status so counts are consistent
+        for (Attendance r : existing) {
+            if (!newStatus.equals(r.getStatus())) {
+                r.setStatus(newStatus);
+                attendanceRepository.save(r);
+            }
+        }
+        activeRecord.setStatus(newStatus);
+
         return attendanceRepository.save(activeRecord);
     }
 
@@ -83,13 +111,35 @@ public class AttendanceServiceImpl implements AttendanceService {
         LocalDate today = LocalDate.now();
         List<Attendance> unclosedRecords = attendanceRepository.findByDateBeforeAndClockOutIsNull(today);
         for (Attendance record : unclosedRecords) {
-            record.setClockOut(LocalTime.of(18, 0)); // set default clock out time to 18:00
+            LocalTime outTime = LocalTime.of(18, 0);
+            record.setClockOut(outTime); // set default clock out time to 18:00
             String currentRemarks = record.getRemarks();
             if (currentRemarks == null || currentRemarks.trim().isEmpty()) {
                 record.setRemarks("System Auto Clock-out");
             } else if (!currentRemarks.contains("System Auto Clock-out")) {
                 record.setRemarks(currentRemarks + " (System Auto Clock-out)");
             }
+            
+            // Recalculate status for this user on that date
+            List<Attendance> dayRecords = attendanceRepository.findByEmployeeIdAndDate(record.getEmployeeId(), record.getDate());
+            long totalMinutes = 0;
+            for (Attendance r : dayRecords) {
+                LocalTime in = r.getClockIn();
+                LocalTime out = r.getClockOut();
+                if (r.getId() != null && r.getId().equals(record.getId())) {
+                    out = outTime;
+                }
+                if (in != null && out != null) {
+                    java.time.Duration duration = java.time.Duration.between(in, out);
+                    totalMinutes += duration.toMinutes();
+                }
+            }
+            String newStatus = totalMinutes >= 420 ? "Present" : "Absent";
+            for (Attendance r : dayRecords) {
+                r.setStatus(newStatus);
+                attendanceRepository.save(r);
+            }
+            record.setStatus(newStatus);
             attendanceRepository.save(record);
         }
     }

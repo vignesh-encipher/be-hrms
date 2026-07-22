@@ -69,10 +69,23 @@ public class CompOffController {
 
     @GetMapping("/history")
     public ResponseEntity<List<CompOffRequest>> getCompOffHistory(@RequestParam(required = false) String employeeId) {
+        List<CompOffRequest> list;
         if (employeeId != null && !employeeId.isEmpty()) {
-            return ResponseEntity.ok(compOffRepository.findByEmployeeId(employeeId));
+            list = compOffRepository.findByEmployeeId(employeeId);
+        } else {
+            list = compOffRepository.findAll();
         }
-        return ResponseEntity.ok(compOffRepository.findAll());
+        
+        // Sort descending by workedDate (mutable array list wrapping)
+        List<CompOffRequest> mutableList = new java.util.ArrayList<>(list);
+        mutableList.sort((a, b) -> {
+            if (b.getWorkedDate() == null && a.getWorkedDate() == null) return 0;
+            if (b.getWorkedDate() == null) return -1;
+            if (a.getWorkedDate() == null) return 1;
+            return b.getWorkedDate().compareTo(a.getWorkedDate());
+        });
+        
+        return ResponseEntity.ok(mutableList);
     }
 
     @PostMapping("/request")
