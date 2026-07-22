@@ -7,11 +7,13 @@ import com.hrms.exception.BadRequestException;
 import com.hrms.exception.ResourceNotFoundException;
 import com.hrms.repository.EmployeeRepository;
 import com.hrms.repository.LeaveRequestRepository;
+import com.hrms.repository.CompOffRepository;
 import com.hrms.service.LeaveService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,14 +30,55 @@ public class LeaveServiceImpl implements LeaveService {
     @Autowired
     private EmployeeRepository employeeRepository;
 
+    @Autowired
+    private CompOffRepository compOffRepository;
+
     @Override
     public LeaveRequest applyLeave(LeaveRequest leaveRequest) {
         if (leaveRequest.getStartDate().isAfter(leaveRequest.getEndDate())) {
             throw new BadRequestException("Start date cannot be after end date");
         }
-        
+        // Check for date range overlaps with existing pending or approved requests
+        List<LeaveRequest> existingLeaves = leaveRequestRepository.findByEmployeeId(leaveRequest.getEmployeeId());
+        if (existingLeaves != null) {
+            for (LeaveRequest existing : existingLeaves) {
+                if (existing.getStartDate() == null || existing.getEndDate() == null || "Rejected".equalsIgnoreCase(existing.getStatus())) {
+                    continue;
+                }
+                
+                boolean overlap = !leaveRequest.getStartDate().isAfter(existing.getEndDate()) &&
+                                  !leaveRequest.getEndDate().isBefore(existing.getStartDate());
+                
+                if (overlap) {
+                    throw new BadRequestException("You already have an active leave request (" + existing.getStatus() + ") that overlaps with the selected date range: " + existing.getStartDate() + " to " + existing.getEndDate());
+                }
+            }
+        }
         long days = ChronoUnit.DAYS.between(leaveRequest.getStartDate(), leaveRequest.getEndDate()) + 1;
         leaveRequest.setNumberOfDays((double) days);
+
+        // Fetch remaining leave balance and subtract any pending requests of same type
+        Map<String, Double> balances = getLeaveBalance(leaveRequest.getEmployeeId());
+        List<LeaveRequest> pendingLeaves = leaveRequestRepository.findByEmployeeId(leaveRequest.getEmployeeId()).stream()
+                .filter(l -> l.getStatus() != null && l.getStatus().startsWith("Pending"))
+                .toList();
+
+        for (LeaveRequest pending : pendingLeaves) {
+            String pType = pending.getLeaveType();
+            if (balances.containsKey(pType)) {
+                balances.put(pType, Math.max(0, balances.get(pType) - (pending.getNumberOfDays() != null ? pending.getNumberOfDays() : 0.0)));
+            }
+        }
+
+        String requestedType = leaveRequest.getLeaveType();
+        Double available = balances.get(requestedType);
+        if (available == null) {
+            throw new BadRequestException("Invalid leave type: " + requestedType);
+        }
+
+        if (available < leaveRequest.getNumberOfDays()) {
+            throw new BadRequestException("Insufficient leave balance! Remaining balance for " + requestedType + " is " + available + " days, requested " + leaveRequest.getNumberOfDays() + " days.");
+        }
 
         // Fetch applicant employee profile to dynamically determine approval chain
         Employee applicant = employeeRepository.findByEmployeeId(leaveRequest.getEmployeeId())
@@ -64,33 +107,21 @@ public class LeaveServiceImpl implements LeaveService {
             leaveRequest.setLevel1Role("MANAGER");
             leaveRequest.setLevel1Status("Pending");
 
-            leaveRequest.setTotalLevels(2);
-            leaveRequest.setCurrentLevel(1);
-            leaveRequest.setStatus("Pending Level 1 - " + leaveRequest.getLevel1ApproverName() + " (Manager)");
-
-            leaveRequest.setLevel2Role("HR");
-            leaveRequest.setLevel2Status("Pending");
-            if (level2Emp.isPresent()) {
-                leaveRequest.setLevel2ApproverId(level2Emp.get().getEmployeeId());
-                leaveRequest.setLevel2ApproverName(level2Emp.get().getFirstName() + " " + level2Emp.get().getLastName());
-            } else {
-                leaveRequest.setLevel2ApproverName("HR Department");
-            }
-        } else {
-            // Level 1 not configured / applicable -> Skip Level 1 and set Level 2 HR as single approval
             leaveRequest.setTotalLevels(1);
-            leaveRequest.setCurrentLevel(2);
-            leaveRequest.setLevel1Status("Skipped");
-
-            leaveRequest.setLevel2Role("HR");
-            leaveRequest.setLevel2Status("Pending");
+            leaveRequest.setCurrentLevel(1);
+            leaveRequest.setStatus("Pending - " + leaveRequest.getLevel1ApproverName());
+        } else {
+            leaveRequest.setTotalLevels(1);
+            leaveRequest.setCurrentLevel(1);
+            leaveRequest.setLevel1Role("HR");
+            leaveRequest.setLevel1Status("Pending");
             if (level2Emp.isPresent()) {
-                leaveRequest.setLevel2ApproverId(level2Emp.get().getEmployeeId());
-                leaveRequest.setLevel2ApproverName(level2Emp.get().getFirstName() + " " + level2Emp.get().getLastName());
+                leaveRequest.setLevel1ApproverId(level2Emp.get().getEmployeeId());
+                leaveRequest.setLevel1ApproverName(level2Emp.get().getFirstName() + " " + level2Emp.get().getLastName());
             } else {
-                leaveRequest.setLevel2ApproverName("HR Department");
+                leaveRequest.setLevel1ApproverName("HR Department");
             }
-            leaveRequest.setStatus("Pending Level 2 - HR Approval");
+            leaveRequest.setStatus("Pending - HR Approval");
         }
 
         if (leaveRequest.getAuditLogs() == null) {
@@ -230,7 +261,39 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Override
     public List<LeaveRequest> getAllLeaveRequests() {
-        return leaveRequestRepository.findAll();
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return java.util.Collections.emptyList();
+        }
+        String username = authentication.getName();
+        Employee currentEmployee = employeeRepository.findByEmail(username)
+                .or(() -> employeeRepository.findByEmployeeId(username))
+                .orElse(null);
+
+        List<LeaveRequest> allLeaves = leaveRequestRepository.findAll();
+
+        if (currentEmployee == null) {
+            return allLeaves;
+        }
+
+        boolean isHR = currentEmployee.getRoles() != null && currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_HR);
+        boolean isSuperAdmin = currentEmployee.getRoles() != null && currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
+
+        if (isHR || isSuperAdmin) {
+            return allLeaves; // HR/Admin see all leave requests
+        }
+
+        // For regular employees and managers: only see requests they submitted OR where they are L1 or L2 approver
+        String empId = currentEmployee.getEmployeeId();
+        String email = currentEmployee.getEmail();
+
+        return allLeaves.stream()
+                .filter(l -> empId.equals(l.getEmployeeId())
+                          || empId.equals(l.getLevel1ApproverId()) 
+                          || (email != null && email.equals(l.getLevel1ApproverId()))
+                          || empId.equals(l.getLevel2ApproverId()) 
+                          || (email != null && email.equals(l.getLevel2ApproverId())))
+                .toList();
     }
 
     @Override
@@ -275,8 +338,25 @@ public class LeaveServiceImpl implements LeaveService {
         balance.put("Casual Leave", 12.0);
         balance.put("Sick Leave", 8.0);
         balance.put("Earned Leave", 15.0);
+        balance.put("Paid Leave", 15.0);
         balance.put("Maternity Leave", 180.0);
         balance.put("Loss of Pay", 365.0);
+
+        // Fetch approved comp-off hours to add to balance
+        List<com.hrms.entity.CompOffRequest> compOffs = compOffRepository.findByEmployeeId(employeeId);
+        double approvedCompOff = 0;
+        if (compOffs != null) {
+            for (com.hrms.entity.CompOffRequest r : compOffs) {
+                if ("Approved".equalsIgnoreCase(r.getStatus())) {
+                    if (r.getExpiryDate() != null && r.getExpiryDate().isBefore(LocalDate.now())) {
+                        // expired, ignore
+                    } else {
+                        approvedCompOff += r.getEarnedDays() != null ? r.getEarnedDays() : 0.0;
+                    }
+                }
+            }
+        }
+        balance.put("Comp Off", approvedCompOff);
 
         List<LeaveRequest> approvedLeaves = leaveRequestRepository.findByEmployeeId(employeeId).stream()
                 .filter(l -> "Approved".equalsIgnoreCase(l.getStatus()))
@@ -286,7 +366,7 @@ public class LeaveServiceImpl implements LeaveService {
             String type = request.getLeaveType();
             if (balance.containsKey(type)) {
                 double current = balance.get(type);
-                balance.put(type, Math.max(0, current - request.getNumberOfDays()));
+                balance.put(type, Math.max(0, current - (request.getNumberOfDays() != null ? request.getNumberOfDays() : 0.0)));
             }
         }
 

@@ -4,6 +4,7 @@ import com.hrms.entity.CompOffRequest;
 import com.hrms.exception.BadRequestException;
 import com.hrms.exception.ResourceNotFoundException;
 import com.hrms.repository.CompOffRepository;
+import com.hrms.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +24,9 @@ public class CompOffController {
 
     @Autowired
     private CompOffRepository compOffRepository;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     @GetMapping("/summary")
     public ResponseEntity<Map<String, Object>> getCompOffSummary(@RequestParam(required = false) String employeeId) {
@@ -109,13 +113,38 @@ public class CompOffController {
     }
 
     @PostMapping("/approve/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<CompOffRequest> approveCompOff(
             @PathVariable String id, 
             @RequestParam(required = false, defaultValue = "Admin") String approvedBy,
             @RequestParam(required = false) String remarks) {
         CompOffRequest existing = compOffRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comp Off request not found: " + id));
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "";
+        com.hrms.entity.Employee currentApprover = employeeRepository.findByEmail(currentUsername)
+                .or(() -> employeeRepository.findByEmployeeId(currentUsername))
+                .orElse(null);
+
+        com.hrms.entity.Employee requester = employeeRepository.findByEmployeeId(existing.getEmployeeId())
+                .or(() -> employeeRepository.findByEmail(existing.getEmployeeId()))
+                .orElse(null);
+
+        if (requester != null && currentApprover != null) {
+            String managerId = requester.getManagerId();
+            boolean isManager = managerId != null && (
+                managerId.equals(currentApprover.getEmployeeId()) ||
+                managerId.equals(currentApprover.getEmail())
+            );
+
+            boolean isHR = currentApprover.getRoles().contains(com.hrms.entity.ERole.ROLE_HR) ||
+                           currentApprover.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
+
+            if (!isHR && !isManager) {
+                throw new BadRequestException("Only the direct reporting manager or HR can approve this Comp-Off request!");
+            }
+        }
 
         existing.setStatus("Approved");
         existing.setApprovedBy(approvedBy);
@@ -125,13 +154,38 @@ public class CompOffController {
     }
 
     @PostMapping("/reject/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<CompOffRequest> rejectCompOff(
             @PathVariable String id, 
             @RequestParam(required = false, defaultValue = "Admin") String approvedBy,
             @RequestParam(required = false) String remarks) {
         CompOffRequest existing = compOffRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comp Off request not found: " + id));
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "";
+        com.hrms.entity.Employee currentApprover = employeeRepository.findByEmail(currentUsername)
+                .or(() -> employeeRepository.findByEmployeeId(currentUsername))
+                .orElse(null);
+
+        com.hrms.entity.Employee requester = employeeRepository.findByEmployeeId(existing.getEmployeeId())
+                .or(() -> employeeRepository.findByEmail(existing.getEmployeeId()))
+                .orElse(null);
+
+        if (requester != null && currentApprover != null) {
+            String managerId = requester.getManagerId();
+            boolean isManager = managerId != null && (
+                managerId.equals(currentApprover.getEmployeeId()) ||
+                managerId.equals(currentApprover.getEmail())
+            );
+
+            boolean isHR = currentApprover.getRoles().contains(com.hrms.entity.ERole.ROLE_HR) ||
+                           currentApprover.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
+
+            if (!isHR && !isManager) {
+                throw new BadRequestException("Only the direct reporting manager or HR can reject this Comp-Off request!");
+            }
+        }
 
         existing.setStatus("Rejected");
         existing.setApprovedBy(approvedBy);

@@ -47,7 +47,7 @@ public class LeaveController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<List<LeaveRequest>> getAllLeaveRequests() {
         return ResponseEntity.ok(leaveService.getAllLeaveRequests());
     }
