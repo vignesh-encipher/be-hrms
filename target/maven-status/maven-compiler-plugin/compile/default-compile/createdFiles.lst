@@ -20,6 +20,7 @@ com/hrms/entity/Attendance.class
 com/hrms/entity/LeaveType$LeaveTypeBuilder.class
 com/hrms/dto/OrgTreeUpdateRequest$OrgTreeUpdateRequestBuilder.class
 com/hrms/config/DatabaseSeeder.class
+com/hrms/dto/ApiResponse.class
 com/hrms/service/AttendanceService.class
 com/hrms/exception/TokenRefreshException.class
 com/hrms/dto/TokenRefreshRequest.class
@@ -42,6 +43,7 @@ com/hrms/serviceImpl/HolidayServiceImpl.class
 com/hrms/exception/ResourceNotFoundException.class
 com/hrms/dto/JwtResponse.class
 com/hrms/dto/DashboardStatsDto.class
+com/hrms/dto/ResponseStatus.class
 com/hrms/entity/Holiday$HolidayBuilder.class
 com/hrms/entity/LeaveRequest$LeaveRequestBuilder.class
 com/hrms/controller/AttendanceController.class
@@ -51,6 +53,7 @@ com/hrms/controller/DesignationController.class
 com/hrms/dto/RegisterRequest.class
 com/hrms/controller/AuthController.class
 com/hrms/repository/LeaveTypeRepository.class
+com/hrms/config/ApiResponseAdvice.class
 com/hrms/service/HolidayService.class
 com/hrms/repository/PayrollRepository.class
 com/hrms/serviceImpl/AttendanceServiceImpl.class

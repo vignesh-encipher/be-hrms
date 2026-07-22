@@ -1,4 +1,5 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/HrmsApplication.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/ApiResponseAdvice.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/DatabaseSeeder.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/OpenApiConfig.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/AttendanceController.java
@@ -13,6 +14,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/LeaveSettingsController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/OrganizationController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/PayrollController.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/ApiResponse.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/DashboardStatsDto.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/EmployeeDto.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/JwtResponse.java
@@ -20,6 +22,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/OrgTreeNodeDto.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/OrgTreeUpdateRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/RegisterRequest.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/ResponseStatus.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshResponse.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/ApprovalAuditLog.java
