@@ -10,4 +10,5 @@ public interface AttendanceService {
     Attendance getTodayAttendance(String employeeId);
     List<Attendance> getMonthlyAttendance(String employeeId, int month, int year);
     List<Attendance> getAllAttendanceForDate(LocalDate date);
+    void resetDailyAttendance();
 }

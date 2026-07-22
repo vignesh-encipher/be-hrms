@@ -49,4 +49,10 @@ public class AttendanceController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(attendanceService.getAllAttendanceForDate(date));
     }
+
+    @PostMapping("/reset")
+    public ResponseEntity<Void> resetDailyAttendance() {
+        attendanceService.resetDailyAttendance();
+        return ResponseEntity.ok().build();
+    }
 }

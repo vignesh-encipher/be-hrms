@@ -18,6 +18,16 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Iterator;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class EmployeeServiceImpl implements EmployeeService {
@@ -232,6 +242,22 @@ public class EmployeeServiceImpl implements EmployeeService {
             existing.setPhoto(employeeDto.getPhoto());
         }
 
+        // Update role if provided
+        if (employeeDto.getRole() != null && !employeeDto.getRole().isEmpty()) {
+            com.hrms.entity.ERole roleEnum = com.hrms.entity.ERole.ROLE_EMPLOYEE;
+            String r = employeeDto.getRole().toUpperCase();
+            if (r.contains("SUPER") || r.contains("SUPER_ADMIN")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_SUPER_ADMIN;
+            } else if (r.contains("HR")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_HR;
+            } else if (r.contains("MANAGER")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_MANAGER;
+            } else if (r.contains("EMPLOYEE")) {
+                roleEnum = com.hrms.entity.ERole.ROLE_EMPLOYEE;
+            }
+            existing.setRoles(java.util.Set.of(roleEnum));
+        }
+
         Employee saved = employeeRepository.save(existing);
         return convertToDto(saved);
     }
@@ -241,5 +267,204 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
         employeeRepository.delete(employee);
+    }
+
+    @Override
+    public byte[] getEmployeeTemplateExcel() {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Employees Template");
+            
+            // Header Row
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {
+                "First Name *", "Last Name *", "Email *", "Phone", "Gender", "DOB (YYYY-MM-DD)", 
+                "Blood Group", "Department ID", "Designation ID", "Manager ID", "Employment Type", 
+                "Salary", "Role (EMPLOYEE/MANAGER/HR) *", "Status (Active/On Leave)"
+            };
+            
+            CellStyle headerCellStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerCellStyle.setFont(headerFont);
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerCellStyle);
+            }
+            
+            // Auto-size columns
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            
+            // Add a sample dummy row
+            Row sampleRow = sheet.createRow(1);
+            sampleRow.createCell(0).setCellValue("John");
+            sampleRow.createCell(1).setCellValue("Doe");
+            sampleRow.createCell(2).setCellValue("john.doe@example.com");
+            sampleRow.createCell(3).setCellValue("1234567890");
+            sampleRow.createCell(4).setCellValue("Male");
+            sampleRow.createCell(5).setCellValue("1995-05-15");
+            sampleRow.createCell(6).setCellValue("O+");
+            sampleRow.createCell(7).setCellValue("ENG");
+            sampleRow.createCell(8).setCellValue("Software Engineer");
+            sampleRow.createCell(9).setCellValue("EMP-001");
+            sampleRow.createCell(10).setCellValue("Full Time");
+            sampleRow.createCell(11).setCellValue(5000.0);
+            sampleRow.createCell(12).setCellValue("EMPLOYEE");
+            sampleRow.createCell(13).setCellValue("Active");
+
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Fail to generate Excel template file: " + e.getMessage(), e);
+        }
+    }
+
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                double numValue = cell.getNumericCellValue();
+                if (numValue == (long) numValue) {
+                    return String.valueOf((long) numValue);
+                }
+                return String.valueOf(numValue);
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
+            default:
+                return "";
+        }
+    }
+
+    @Override
+    public Map<String, Object> uploadBulkEmployees(MultipartFile file) {
+        Map<String, Object> response = new HashMap<>();
+        int successCount = 0;
+        int failCount = 0;
+        List<String> errors = new java.util.ArrayList<>();
+
+        try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            Iterator<Row> rows = sheet.iterator();
+            
+            // Skip Header
+            if (rows.hasNext()) {
+                rows.next();
+            }
+            
+            long employeeCount = employeeRepository.count();
+            String defaultPassword = passwordEncoder.encode("Password@123");
+
+            while (rows.hasNext()) {
+                Row currentRow = rows.next();
+                
+                // Check if the row is empty
+                String firstName = getCellValueAsString(currentRow.getCell(0));
+                String lastName = getCellValueAsString(currentRow.getCell(1));
+                String email = getCellValueAsString(currentRow.getCell(2));
+                
+                if (firstName.isEmpty() && lastName.isEmpty() && email.isEmpty()) {
+                    continue; // Skip empty rows
+                }
+                
+                try {
+                    if (firstName.isEmpty() || lastName.isEmpty() || email.isEmpty()) {
+                        throw new BadRequestException("First Name, Last Name, and Email are required fields.");
+                    }
+                    
+                    if (employeeRepository.findByEmail(email).isPresent()) {
+                        throw new BadRequestException("Email '" + email + "' is already in use.");
+                    }
+
+                    String phone = getCellValueAsString(currentRow.getCell(3));
+                    String gender = getCellValueAsString(currentRow.getCell(4));
+                    String dobStr = getCellValueAsString(currentRow.getCell(5));
+                    LocalDate dob = null;
+                    if (!dobStr.isEmpty()) {
+                        try {
+                            dob = LocalDate.parse(dobStr, DateTimeFormatter.ISO_LOCAL_DATE);
+                        } catch (Exception ex) {
+                            throw new BadRequestException("Invalid DOB format. Must be YYYY-MM-DD.");
+                        }
+                    }
+
+                    String bloodGroup = getCellValueAsString(currentRow.getCell(6));
+                    String departmentId = getCellValueAsString(currentRow.getCell(7));
+                    String designationId = getCellValueAsString(currentRow.getCell(8));
+                    String managerId = getCellValueAsString(currentRow.getCell(9));
+                    String employmentType = getCellValueAsString(currentRow.getCell(10));
+                    
+                    double salary = 0;
+                    String salaryStr = getCellValueAsString(currentRow.getCell(11));
+                    if (!salaryStr.isEmpty()) {
+                        try {
+                            salary = Double.parseDouble(salaryStr);
+                        } catch (Exception ex) {
+                            throw new BadRequestException("Invalid Salary. Must be a numeric value.");
+                        }
+                    }
+
+                    String roleStr = getCellValueAsString(currentRow.getCell(12)).toUpperCase();
+                    com.hrms.entity.ERole roleEnum = com.hrms.entity.ERole.ROLE_EMPLOYEE;
+                    if (roleStr.contains("SUPER")) {
+                        roleEnum = com.hrms.entity.ERole.ROLE_SUPER_ADMIN;
+                    } else if (roleStr.contains("HR")) {
+                        roleEnum = com.hrms.entity.ERole.ROLE_HR;
+                    } else if (roleStr.contains("MANAGER")) {
+                        roleEnum = com.hrms.entity.ERole.ROLE_MANAGER;
+                    }
+
+                    String status = getCellValueAsString(currentRow.getCell(13));
+                    if (status.isEmpty()) {
+                        status = "Active";
+                    }
+
+                    employeeCount++;
+                    Employee employee = Employee.builder()
+                            .employeeId(String.format("EMP-%03d", employeeCount))
+                            .firstName(firstName)
+                            .lastName(lastName)
+                            .email(email)
+                            .phone(phone)
+                            .gender(gender)
+                            .dob(dob)
+                            .bloodGroup(bloodGroup)
+                            .departmentId(departmentId)
+                            .designationId(designationId)
+                            .managerId(managerId)
+                            .joiningDate(LocalDate.now())
+                            .employmentType(employmentType.isEmpty() ? "Full Time" : employmentType)
+                            .salary(salary)
+                            .password(defaultPassword)
+                            .roles(java.util.Set.of(roleEnum))
+                            .status(status)
+                            .build();
+
+                    employeeRepository.save(employee);
+                    successCount++;
+                } catch (Exception e) {
+                    failCount++;
+                    errors.add("Row " + (currentRow.getRowNum() + 1) + " (" + (email.isEmpty() ? "No Email" : email) + "): " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse Excel file: " + e.getMessage(), e);
+        }
+
+        response.put("successCount", successCount);
+        response.put("failCount", failCount);
+        response.put("errors", errors);
+        return response;
     }
 }

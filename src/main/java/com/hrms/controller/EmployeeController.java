@@ -74,4 +74,20 @@ public class EmployeeController {
         employeeService.deleteEmployee(id);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/template")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR')")
+    public ResponseEntity<byte[]> getEmployeeTemplate() {
+        byte[] excelData = employeeService.getEmployeeTemplateExcel();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=employees_template.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelData);
+    }
+
+    @PostMapping("/upload-bulk")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR')")
+    public ResponseEntity<java.util.Map<String, Object>> uploadBulkEmployees(@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return ResponseEntity.ok(employeeService.uploadBulkEmployees(file));
+    }
 }

@@ -77,4 +77,20 @@ public class AttendanceServiceImpl implements AttendanceService {
     public List<Attendance> getAllAttendanceForDate(LocalDate date) {
         return attendanceRepository.findByDate(date);
     }
+
+    @Override
+    public void resetDailyAttendance() {
+        LocalDate today = LocalDate.now();
+        List<Attendance> unclosedRecords = attendanceRepository.findByDateBeforeAndClockOutIsNull(today);
+        for (Attendance record : unclosedRecords) {
+            record.setClockOut(LocalTime.of(18, 0)); // set default clock out time to 18:00
+            String currentRemarks = record.getRemarks();
+            if (currentRemarks == null || currentRemarks.trim().isEmpty()) {
+                record.setRemarks("System Auto Clock-out");
+            } else if (!currentRemarks.contains("System Auto Clock-out")) {
+                record.setRemarks(currentRemarks + " (System Auto Clock-out)");
+            }
+            attendanceRepository.save(record);
+        }
+    }
 }

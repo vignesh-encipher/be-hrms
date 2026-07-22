@@ -48,6 +48,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/LeaveTypeRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/PayrollRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/RefreshTokenRepository.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/scheduler/AttendanceScheduler.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/WebSecurityConfig.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/jwt/AuthEntryPointJwt.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/security/jwt/AuthTokenFilter.java

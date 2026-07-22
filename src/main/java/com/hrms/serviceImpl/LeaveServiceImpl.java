@@ -45,13 +45,17 @@ public class LeaveServiceImpl implements LeaveService {
         // Determine Level 1 Approver (Reporting Manager / Team Lead / HR Manager)
         String level1Id = applicant.getManagerId();
         Optional<Employee> level1Emp = (level1Id != null && !level1Id.isEmpty())
-                ? employeeRepository.findByEmployeeId(level1Id).or(() -> employeeRepository.findById(level1Id))
+                ? employeeRepository.findByEmployeeId(level1Id)
+                    .or(() -> employeeRepository.findById(level1Id))
+                    .or(() -> employeeRepository.findByEmail(level1Id))
                 : Optional.empty();
 
         // Determine Level 2 Approver (HR Approver)
         String level2Id = applicant.getHrApproverId();
         Optional<Employee> level2Emp = (level2Id != null && !level2Id.isEmpty())
-                ? employeeRepository.findByEmployeeId(level2Id).or(() -> employeeRepository.findById(level2Id))
+                ? employeeRepository.findByEmployeeId(level2Id)
+                    .or(() -> employeeRepository.findById(level2Id))
+                    .or(() -> employeeRepository.findByEmail(level2Id))
                 : Optional.empty();
 
         if (level1Emp.isPresent()) {
@@ -123,8 +127,19 @@ public class LeaveServiceImpl implements LeaveService {
                 .build();
 
         if (currentLvl == 1) {
-            if (!isManager && !isHR) {
-                throw new BadRequestException("Only Reporting Manager / Lead can perform Level 1 approval!");
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = auth != null ? auth.getName() : "";
+            Employee currentEmp = employeeRepository.findByEmail(currentUsername)
+                    .or(() -> employeeRepository.findByEmployeeId(currentUsername))
+                    .orElse(null);
+
+            boolean isDesignatedApprover = currentEmp != null && (
+                currentEmp.getEmployeeId().equals(leaveRequest.getLevel1ApproverId()) ||
+                (currentEmp.getEmail() != null && currentEmp.getEmail().equals(leaveRequest.getLevel1ApproverId()))
+            );
+
+            if (!isManager && !isHR && !isDesignatedApprover) {
+                throw new BadRequestException("Only designated Reporting Manager / Lead or Assigned Peer can perform Level 1 approval!");
             }
             leaveRequest.setLevel1Status("Approved");
             leaveRequest.setLevel1Remarks(remarks);
@@ -177,6 +192,20 @@ public class LeaveServiceImpl implements LeaveService {
                 .build();
 
         if (currentLvl == 1) {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = auth != null ? auth.getName() : "";
+            Employee currentEmp = employeeRepository.findByEmail(currentUsername)
+                    .or(() -> employeeRepository.findByEmployeeId(currentUsername))
+                    .orElse(null);
+
+            boolean isDesignatedApprover = currentEmp != null && (
+                currentEmp.getEmployeeId().equals(leaveRequest.getLevel1ApproverId()) ||
+                (currentEmp.getEmail() != null && currentEmp.getEmail().equals(leaveRequest.getLevel1ApproverId()))
+            );
+
+            if (!isManager && !isHR && !isDesignatedApprover) {
+                throw new BadRequestException("Only designated Reporting Manager / Lead or Assigned Peer can perform Level 1 rejection!");
+            }
             leaveRequest.setLevel1Status("Rejected");
             leaveRequest.setLevel1Remarks(remarks);
         } else {
@@ -206,8 +235,37 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Override
     public List<LeaveRequest> getPendingLeaveRequests() {
-        return leaveRequestRepository.findAll().stream()
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return java.util.Collections.emptyList();
+        }
+        String username = authentication.getName();
+        Employee currentEmployee = employeeRepository.findByEmail(username)
+                .or(() -> employeeRepository.findByEmployeeId(username))
+                .orElse(null);
+
+        List<LeaveRequest> allPending = leaveRequestRepository.findAll().stream()
                 .filter(l -> l.getStatus() != null && l.getStatus().startsWith("Pending"))
+                .toList();
+
+        if (currentEmployee == null) {
+            return allPending;
+        }
+
+        boolean isHR = currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_HR);
+        boolean isSuperAdmin = currentEmployee.getRoles().contains(com.hrms.entity.ERole.ROLE_SUPER_ADMIN);
+
+        if (isHR || isSuperAdmin) {
+            return allPending; // HR/Admin see all pending requests
+        }
+
+        // For regular employees and managers: only see requests where they are L1 or L2 approver
+        String empId = currentEmployee.getEmployeeId();
+        String email = currentEmployee.getEmail();
+
+        return allPending.stream()
+                .filter(l -> (l.getCurrentLevel() == 1 && (empId.equals(l.getLevel1ApproverId()) || (email != null && email.equals(l.getLevel1ApproverId()))))
+                          || (l.getCurrentLevel() == 2 && (empId.equals(l.getLevel2ApproverId()) || (email != null && email.equals(l.getLevel2ApproverId())))))
                 .toList();
     }
 

@@ -15,4 +15,6 @@ public interface EmployeeService {
     EmployeeDto createEmployee(EmployeeDto employeeDto);
     EmployeeDto updateEmployee(String id, EmployeeDto employeeDto);
     void deleteEmployee(String id);
+    byte[] getEmployeeTemplateExcel();
+    java.util.Map<String, Object> uploadBulkEmployees(org.springframework.web.multipart.MultipartFile file);
 }

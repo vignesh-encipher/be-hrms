@@ -24,7 +24,7 @@ public class LeaveController {
     }
 
     @PostMapping("/approve/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<LeaveRequest> approveLeave(
             @PathVariable String id,
             @RequestParam String role,
@@ -33,7 +33,7 @@ public class LeaveController {
     }
 
     @PostMapping("/reject/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<LeaveRequest> rejectLeave(
             @PathVariable String id,
             @RequestParam String role,
@@ -53,7 +53,7 @@ public class LeaveController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HR') or hasRole('MANAGER') or hasRole('EMPLOYEE')")
     public ResponseEntity<List<LeaveRequest>> getPendingLeaveRequests() {
         return ResponseEntity.ok(leaveService.getPendingLeaveRequests());
     }
