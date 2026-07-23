@@ -1,9 +1,13 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/HrmsApplication.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/ApiResponseAdvice.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/ChatWebSocketHandler.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/DatabaseSeeder.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/OpenApiConfig.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/WebMvcConfig.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/config/WebSocketConfig.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/AttendanceController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/AuthController.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/ChatController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/CompOffController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/DashboardController.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/controller/DepartmentController.java
@@ -28,6 +32,8 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/dto/TokenRefreshResponse.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/ApprovalAuditLog.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Attendance.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Channel.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/ChannelMember.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/CompOffRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Department.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Designation.java
@@ -36,6 +42,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Holiday.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/LeaveRequest.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/LeaveType.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Message.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/Payroll.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/RefreshToken.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/entity/RegularizationRequest.java
@@ -44,6 +51,8 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/exception/ResourceNotFoundException.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/exception/TokenRefreshException.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/AttendanceRepository.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/ChannelMemberRepository.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/ChannelRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/CompOffRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/DepartmentRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/DesignationRepository.java
@@ -51,6 +60,7 @@
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/HolidayRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/LeaveRequestRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/LeaveTypeRepository.java
+/Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/MessageRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/PayrollRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/RefreshTokenRepository.java
 /Users/macos/Desktop/repos/HRMS/be-hrms/src/main/java/com/hrms/repository/RegularizationRepository.java
