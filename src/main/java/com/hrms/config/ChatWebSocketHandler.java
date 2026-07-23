@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hrms.entity.Employee;
 import com.hrms.entity.Message;
 import com.hrms.repository.ChannelMemberRepository;
+import com.hrms.repository.ChannelRepository;
 import com.hrms.repository.EmployeeRepository;
 import com.hrms.security.jwt.JwtUtils;
 import org.slf4j.Logger;
@@ -41,6 +42,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Autowired
     private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -155,11 +159,26 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastToChannel(String channelId, Object payload, String excludeUserId) {
-        channelMemberRepository.findByChannelId(channelId).forEach(member -> {
-            if (!member.getUserId().equals(excludeUserId)) {
-                sendMessageToUser(member.getUserId(), payload);
-            }
-        });
+        Optional<com.hrms.entity.Channel> channelOpt = channelRepository.findById(channelId);
+        if (channelOpt.isPresent() && "PUBLIC".equalsIgnoreCase(channelOpt.get().getType())) {
+            logger.info("[WS-BROADCAST] Channel {} is PUBLIC. Broadcasting to all connected users.", channelId);
+            userSessions.keySet().forEach(userId -> {
+                if (!userId.equals(excludeUserId)) {
+                    logger.info("[WS-BROADCAST] Dispatching message payload to user: {}", userId);
+                    sendMessageToUser(userId, payload);
+                }
+            });
+        } else {
+            java.util.List<com.hrms.entity.ChannelMember> members = channelMemberRepository.findByChannelId(channelId);
+            logger.info("[WS-BROADCAST] Channel {} is PRIVATE. Found {} members. Exclude: {}", channelId, members.size(), excludeUserId);
+            members.forEach(member -> {
+                logger.info("[WS-BROADCAST] Checking member: {} (exclude match: {})", member.getUserId(), member.getUserId().equals(excludeUserId));
+                if (!member.getUserId().equals(excludeUserId)) {
+                    logger.info("[WS-BROADCAST] Dispatching message payload to user: {}", member.getUserId());
+                    sendMessageToUser(member.getUserId(), payload);
+                }
+            });
+        }
     }
 
     private void broadcastStatusChange(String userId, String status) {

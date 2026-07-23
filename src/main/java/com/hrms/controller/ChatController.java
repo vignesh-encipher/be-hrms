@@ -80,10 +80,118 @@ public class ChatController {
                 
                 long memberCount = channelMemberRepository.findByChannelId(channel.getId()).size();
                 map.put("memberCount", memberCount);
+
+                List<Message> channelMessages = messageRepository.findByConversationId(channel.getId());
+                if (!channelMessages.isEmpty()) {
+                    channelMessages.sort((m1, m2) -> m2.getCreatedAt().compareTo(m1.getCreatedAt()));
+                    Message latestMsg = channelMessages.get(0);
+                    map.put("lastMessage", latestMsg.getMessage());
+                    map.put("lastMessageTime", latestMsg.getCreatedAt());
+                } else {
+                    map.put("lastMessage", "");
+                    map.put("lastMessageTime", channel.getCreatedAt());
+                }
+                
+                long unreadCount = channelMessages.stream()
+                        .filter(m -> !m.getSenderId().equals(userId) && (m.getReadBy() == null || !m.getReadBy().contains(userId)))
+                        .count();
+                map.put("unreadCount", unreadCount);
+
                 result.add(map);
             }
         }
+
+        result.sort((c1, c2) -> {
+            LocalDateTime t1 = (LocalDateTime) c1.get("lastMessageTime");
+            LocalDateTime t2 = (LocalDateTime) c2.get("lastMessageTime");
+            return t2.compareTo(t1);
+        });
+
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/conversations")
+    public ResponseEntity<List<Map<String, Object>>> getActiveConversations(Authentication authentication) {
+        String currentUserId = getCurrentUser(authentication).getId();
+        
+        List<Message> messages = messageRepository.findByConversationIdContaining(currentUserId);
+        
+        Map<String, List<Message>> grouped = messages.stream()
+                .filter(m -> m.getConversationId() != null && m.getConversationId().contains("_"))
+                .collect(Collectors.groupingBy(Message::getConversationId));
+                
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        for (Map.Entry<String, List<Message>> entry : grouped.entrySet()) {
+            String convId = entry.getKey();
+            List<Message> msgList = entry.getValue();
+            
+            msgList.sort((m1, m2) -> m2.getCreatedAt().compareTo(m1.getCreatedAt()));
+            Message latestMsg = msgList.get(0);
+            
+            long unreadCount = msgList.stream()
+                    .filter(m -> !m.getSenderId().equals(currentUserId) && (m.getReadBy() == null || !m.getReadBy().contains(currentUserId)))
+                    .count();
+                    
+            String[] parts = convId.split("_");
+            if (parts.length < 2) continue;
+            String otherUserId = parts[0].equals(currentUserId) ? parts[1] : parts[0];
+            
+            Optional<Employee> otherUserOpt = employeeRepository.findById(otherUserId);
+            if (otherUserOpt.isPresent()) {
+                Employee otherUser = otherUserOpt.get();
+                Map<String, Object> map = new HashMap<>();
+                map.put("conversationId", convId);
+                map.put("otherUserId", otherUserId);
+                map.put("name", otherUser.getFirstName() + " " + otherUser.getLastName());
+                map.put("avatar", otherUser.getPhoto());
+                map.put("status", otherUser.getStatus());
+                map.put("lastMessage", latestMsg.getMessage());
+                map.put("lastMessageTime", latestMsg.getCreatedAt());
+                map.put("unreadCount", unreadCount);
+                result.add(map);
+            }
+        }
+        
+        result.sort((c1, c2) -> ((LocalDateTime) c2.get("lastMessageTime")).compareTo((LocalDateTime) c1.get("lastMessageTime")));
+        
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/conversations/{conversationId}/read")
+    public ResponseEntity<?> markConversationAsRead(@PathVariable String conversationId, Authentication authentication) {
+        String currentUserId = getCurrentUser(authentication).getId();
+        List<Message> messages = messageRepository.findByConversationId(conversationId);
+        
+        boolean updated = false;
+        for (Message message : messages) {
+            if (!message.getSenderId().equals(currentUserId) && (message.getReadBy() == null || !message.getReadBy().contains(currentUserId))) {
+                if (message.getReadBy() == null) {
+                    message.setReadBy(new HashSet<>());
+                }
+                message.getReadBy().add(currentUserId);
+                messageRepository.save(message);
+                updated = true;
+            }
+        }
+        
+        if (updated) {
+            Map<String, Object> wsMsg = Map.of(
+                "type", "CONVERSATION_READ",
+                "conversationId", conversationId,
+                "readerId", currentUserId
+            );
+            if (conversationId.contains("_")) {
+                String[] parts = conversationId.split("_");
+                String otherUserId = parts[0].equals(currentUserId) ? parts[1] : parts[0];
+                chatWebSocketHandler.sendMessageToUser(otherUserId, wsMsg);
+                chatWebSocketHandler.sendMessageToUser(currentUserId, wsMsg); // Echo to current user sessions/tabs
+            } else {
+                chatWebSocketHandler.broadcastToChannel(conversationId, wsMsg, null);
+            }
+        }
+        
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/channels")
@@ -101,6 +209,29 @@ public class ChatController {
                 .joinedAt(LocalDateTime.now())
                 .build();
         channelMemberRepository.save(member);
+
+        // Add initial members if provided
+        if (channel.getInitialMembers() != null) {
+            for (String memberId : channel.getInitialMembers()) {
+                if (!memberId.equals(userId) && !channelMemberRepository.existsByChannelIdAndUserId(saved.getId(), memberId)) {
+                    ChannelMember extraMember = ChannelMember.builder()
+                            .channelId(saved.getId())
+                            .userId(memberId)
+                            .role("MEMBER")
+                            .joinedAt(LocalDateTime.now())
+                            .build();
+                    channelMemberRepository.save(extraMember);
+                }
+            }
+        }
+
+        // Notify all channel members via WebSocket that a new channel was created
+        Map<String, Object> wsMsg = Map.of(
+            "type", "CHANNEL_CREATED",
+            "channelId", saved.getId()
+        );
+        chatWebSocketHandler.broadcastToChannel(saved.getId(), wsMsg, null);
+        chatWebSocketHandler.sendMessageToUser(userId, wsMsg);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }

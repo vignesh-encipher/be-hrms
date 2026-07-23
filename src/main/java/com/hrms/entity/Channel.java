@@ -30,4 +30,7 @@ public class Channel {
     private LocalDateTime createdAt = LocalDateTime.now();
     
     private String avatar; // base64 or URL placeholder
+    
+    @org.springframework.data.annotation.Transient
+    private java.util.List<String> initialMembers;
 }

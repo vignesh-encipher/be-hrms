@@ -17,8 +17,12 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     // Fallback if deletedForUsers list is empty or for direct queries
     Page<Message> findByConversationId(String conversationId, Pageable pageable);
 
+    List<Message> findByConversationId(String conversationId);
+
     @Query("{ 'conversationId': ?0, 'attachmentUrl': { $ne: null } }")
     List<Message> findAttachmentsByConversationId(String conversationId);
 
     List<Message> findByConversationIdAndPinnedTrue(String conversationId);
+
+    List<Message> findByConversationIdContaining(String userId);
 }
