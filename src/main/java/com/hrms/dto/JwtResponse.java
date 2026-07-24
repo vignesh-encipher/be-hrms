@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @Data
@@ -21,4 +22,7 @@ public class JwtResponse {
     private String email;
     private List<String> roles;
     private String employeeId;
+
+    @JsonProperty("isFirstLogin")
+    private Boolean isFirstLogin;
 }

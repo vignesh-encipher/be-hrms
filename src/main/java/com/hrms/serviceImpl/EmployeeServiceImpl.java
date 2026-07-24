@@ -201,6 +201,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setEmail(email);
         employee.setPassword(passwordEncoder.encode(employeeDto.getPassword()));
         employee.setRoles(java.util.Set.of(roleEnum));
+        employee.setIsFirstLogin(true);
 
         if (employee.getEmployeeId() == null || employee.getEmployeeId().isEmpty()) {
             long count = employeeRepository.count();

@@ -61,16 +61,18 @@ public class AuthController {
 
         Optional<Employee> emp = employeeRepository.findById(userDetails.getId());
         String employeeId = emp.isPresent() ? emp.get().getEmployeeId() : null;
+        Boolean isFirstLogin = emp.isPresent() ? emp.get().getIsFirstLogin() : true;
 
         return ResponseEntity.ok(JwtResponse.builder()
-                .token(jwt)
-                .refreshToken(refreshToken.getToken())
-                .id(userDetails.getId())
-                .username(userDetails.getUsername())
-                .email(userDetails.getEmail())
-                .roles(roles)
-                .employeeId(employeeId)
-                .build());
+                 .token(jwt)
+                 .refreshToken(refreshToken.getToken())
+                 .id(userDetails.getId())
+                 .username(userDetails.getUsername())
+                 .email(userDetails.getEmail())
+                 .roles(roles)
+                 .employeeId(employeeId)
+                 .isFirstLogin(isFirstLogin)
+                 .build());
     }
 
     @PostMapping("/register")
@@ -115,6 +117,7 @@ public class AuthController {
                 .roles(roles)
                 .status("Active")
                 .employmentType("Full Time")
+                .isFirstLogin(true)
                 .build();
 
         employeeRepository.save(employee);
@@ -136,5 +139,64 @@ public class AuthController {
                     return ResponseEntity.ok(new TokenRefreshResponse(token, requestRefreshToken));
                 })
                 .orElseThrow(() -> new BadRequestException("Refresh token is not in database!"));
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 8) {
+            throw new BadRequestException("Password must be at least 8 characters long!");
+        }
+        if (!password.matches(".*[A-Z].*")) {
+            throw new BadRequestException("Password must contain at least one uppercase letter!");
+        }
+        if (!password.matches(".*[a-z].*")) {
+            throw new BadRequestException("Password must contain at least one lowercase letter!");
+        }
+        if (!password.matches(".*[0-9].*")) {
+            throw new BadRequestException("Password must contain at least one number!");
+        }
+        if (!password.matches(".*[!@#$%^&*(),.?\"':{}|<>].*")) {
+            throw new BadRequestException("Password must contain at least one special character!");
+        }
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            return ResponseEntity.status(401).body("Error: Unauthorized");
+        }
+        
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        String userId = userDetails.getId();
+        
+        Employee employee = employeeRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("Employee not found"));
+
+        // Validate old password
+        if (!encoder.matches(request.getOldPassword(), employee.getPassword())) {
+            return ResponseEntity.badRequest().body("Error: Current password does not match!");
+        }
+
+        // Validate new password reuse
+        if (request.getNewPassword().equals(request.getOldPassword())) {
+            return ResponseEntity.badRequest().body("Error: New password cannot be the same as the old password!");
+        }
+
+        // Validate new password strength
+        validatePassword(request.getNewPassword());
+
+        // Update password
+        employee.setPassword(encoder.encode(request.getNewPassword()));
+        employee.setIsFirstLogin(false);
+        employeeRepository.save(employee);
+
+        // Revoke active sessions by deleting user refresh tokens
+        try {
+            refreshTokenService.deleteByUserId(userId);
+        } catch (Exception e) {
+            // Ignore if transactional not fully supported in simple mongo setups
+        }
+
+        return ResponseEntity.ok("Password changed successfully!");
     }
 }

@@ -49,8 +49,15 @@ public class Employee {
 
     // Authentication & Security credentials stored directly on Employee
     private String password;
+
+    @Builder.Default
+    private Boolean isFirstLogin = true;
     
     @Builder.Default
     private java.util.Set<ERole> roles = new java.util.HashSet<>();
+
+    public Boolean getIsFirstLogin() {
+        return isFirstLogin == null ? true : isFirstLogin;
+    }
 }
 
