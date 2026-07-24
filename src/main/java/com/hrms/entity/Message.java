@@ -1,10 +1,12 @@
 package com.hrms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -19,6 +21,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "messages")
+@CompoundIndex(name = "conversationId_createdAt", def = "{'conversationId': 1, 'createdAt': -1}")
 public class Message {
     @Id
     private String id;
@@ -59,8 +62,9 @@ public class Message {
     @Builder.Default
     private Set<String> deliveredTo = new HashSet<>();
     
+    @JsonIgnore
     @Builder.Default
-    private Set<String> deletedForUsers = new HashSet<>(); // User IDs who deleted this message "for me"
+    private Set<String> deletedForUsers = new HashSet<>(); // User IDs who deleted this message "for me" - server-side filter only, never needed by clients
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

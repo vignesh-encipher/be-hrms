@@ -1,20 +1,26 @@
 package com.hrms.controller;
 
 import com.hrms.config.ChatWebSocketHandler;
+import com.hrms.dto.MessagePageResponse;
 import com.hrms.entity.Channel;
 import com.hrms.entity.ChannelMember;
+import com.hrms.entity.ConversationReadState;
 import com.hrms.entity.Employee;
 import com.hrms.entity.Message;
 import com.hrms.repository.ChannelMemberRepository;
 import com.hrms.repository.ChannelRepository;
+import com.hrms.repository.ConversationReadStateRepository;
 import com.hrms.repository.EmployeeRepository;
 import com.hrms.repository.MessageRepository;
 import com.hrms.security.services.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -27,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
@@ -49,8 +56,76 @@ public class ChatController {
     @Autowired
     private ChatWebSocketHandler chatWebSocketHandler;
 
+    @Autowired
+    private ConversationReadStateRepository readStateRepository;
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
+
+    private static final int INITIAL_READ_HISTORY_SIZE = 70;
+    private static final int OLDER_PAGE_SIZE = 50;
+    private static final int UNREAD_SAFETY_CAP = 500;
+    private static final int READ_RECEIPT_BULK_LIMIT = 200;
+    // Sentinel "beginning of time" for a conversation with no read history at all - not
+    // LocalDateTime.MIN, which Spring Data Mongo's LocalDateTime->Date converter cannot
+    // represent (year -999999999 overflows java.util.Date's range) and throws on.
+    private static final LocalDateTime NEVER_READ = LocalDateTime.of(1970, 1, 1, 0, 0);
+
     private UserDetailsImpl getCurrentUser(Authentication authentication) {
         return (UserDetailsImpl) authentication.getPrincipal();
+    }
+
+    private Criteria notDeletedForUser(String userId) {
+        return new Criteria().orOperator(
+                Criteria.where("deletedForUsers").exists(false),
+                Criteria.where("deletedForUsers").is(null),
+                Criteria.where("deletedForUsers").ne(userId)
+        );
+    }
+
+    private Message findLatestMessage(String conversationId) {
+        Query query = Query.query(Criteria.where("conversationId").is(conversationId))
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .limit(1);
+        return mongoTemplate.findOne(query, Message.class);
+    }
+
+    /**
+     * The per-user read cursor for a conversation. Falls back to a one-time derivation
+     * from the legacy per-message readBy set when no cursor exists yet (pre-migration
+     * conversations), so existing history doesn't suddenly appear unread; a real cursor
+     * gets created the next time markConversationAsRead runs. A brand-new conversation
+     * with no read history at all correctly resolves to "everything is unread".
+     */
+    private LocalDateTime resolveLastReadAt(String conversationId, String userId) {
+        Optional<ConversationReadState> state = readStateRepository.findByConversationIdAndUserId(conversationId, userId);
+        if (state.isPresent()) {
+            return state.get().getLastReadAt();
+        }
+        Query legacyQuery = Query.query(Criteria.where("conversationId").is(conversationId).and("readBy").is(userId))
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .limit(1);
+        Message lastRead = mongoTemplate.findOne(legacyQuery, Message.class);
+        return lastRead != null ? lastRead.getCreatedAt() : NEVER_READ;
+    }
+
+    private long countUnread(String conversationId, LocalDateTime since, String userId) {
+        Query query = Query.query(Criteria.where("conversationId").is(conversationId)
+                .and("createdAt").gt(since)
+                .andOperator(notDeletedForUser(userId)));
+        return mongoTemplate.count(query, Message.class);
+    }
+
+    /** O(1) upsert of a user's read cursor - called both explicitly (mark-as-read) and
+     * implicitly (sending a message means you've necessarily seen everything up to it). */
+    private void advanceReadCursor(String conversationId, String userId) {
+        ConversationReadState state = readStateRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseGet(() -> ConversationReadState.builder()
+                        .conversationId(conversationId)
+                        .userId(userId)
+                        .build());
+        state.setLastReadAt(LocalDateTime.now());
+        readStateRepository.save(state);
     }
 
     // Channels CRUD
@@ -81,20 +156,17 @@ public class ChatController {
                 long memberCount = channelMemberRepository.findByChannelId(channel.getId()).size();
                 map.put("memberCount", memberCount);
 
-                List<Message> channelMessages = messageRepository.findByConversationId(channel.getId());
-                if (!channelMessages.isEmpty()) {
-                    channelMessages.sort((m1, m2) -> m2.getCreatedAt().compareTo(m1.getCreatedAt()));
-                    Message latestMsg = channelMessages.get(0);
+                Message latestMsg = findLatestMessage(channel.getId());
+                if (latestMsg != null) {
                     map.put("lastMessage", latestMsg.getMessage());
                     map.put("lastMessageTime", latestMsg.getCreatedAt());
                 } else {
                     map.put("lastMessage", "");
                     map.put("lastMessageTime", channel.getCreatedAt());
                 }
-                
-                long unreadCount = channelMessages.stream()
-                        .filter(m -> !m.getSenderId().equals(userId) && (m.getReadBy() == null || !m.getReadBy().contains(userId)))
-                        .count();
+
+                LocalDateTime lastReadAt = resolveLastReadAt(channel.getId(), userId);
+                long unreadCount = countUnread(channel.getId(), lastReadAt, userId);
                 map.put("unreadCount", unreadCount);
 
                 result.add(map);
@@ -113,32 +185,30 @@ public class ChatController {
     @GetMapping("/conversations")
     public ResponseEntity<List<Map<String, Object>>> getActiveConversations(Authentication authentication) {
         String currentUserId = getCurrentUser(authentication).getId();
-        
-        List<Message> messages = messageRepository.findByConversationIdContaining(currentUserId);
-        
-        Map<String, List<Message>> grouped = messages.stream()
-                .filter(m -> m.getConversationId() != null && m.getConversationId().contains("_"))
-                .collect(Collectors.groupingBy(Message::getConversationId));
-                
+
+        // Only the distinct conversation ids are needed here, not every message in them -
+        // avoids loading every DM message this user has ever sent/received just to list threads.
+        Query distinctQuery = Query.query(Criteria.where("conversationId").regex(Pattern.quote(currentUserId)));
+        List<String> conversationIds = mongoTemplate.findDistinct(distinctQuery, "conversationId", Message.class, String.class)
+                .stream()
+                .filter(id -> id != null && id.contains("_"))
+                .collect(Collectors.toList());
+
         List<Map<String, Object>> result = new ArrayList<>();
-        
-        for (Map.Entry<String, List<Message>> entry : grouped.entrySet()) {
-            String convId = entry.getKey();
-            List<Message> msgList = entry.getValue();
-            
-            msgList.sort((m1, m2) -> m2.getCreatedAt().compareTo(m1.getCreatedAt()));
-            Message latestMsg = msgList.get(0);
-            
-            long unreadCount = msgList.stream()
-                    .filter(m -> !m.getSenderId().equals(currentUserId) && (m.getReadBy() == null || !m.getReadBy().contains(currentUserId)))
-                    .count();
-                    
+
+        for (String convId : conversationIds) {
+            Message latestMsg = findLatestMessage(convId);
+            if (latestMsg == null) continue;
+
             String[] parts = convId.split("_");
             if (parts.length < 2) continue;
             String otherUserId = parts[0].equals(currentUserId) ? parts[1] : parts[0];
-            
+
             Optional<Employee> otherUserOpt = employeeRepository.findById(otherUserId);
             if (otherUserOpt.isPresent()) {
+                LocalDateTime lastReadAt = resolveLastReadAt(convId, currentUserId);
+                long unreadCount = countUnread(convId, lastReadAt, currentUserId);
+
                 Employee otherUser = otherUserOpt.get();
                 Map<String, Object> map = new HashMap<>();
                 map.put("conversationId", convId);
@@ -152,29 +222,35 @@ public class ChatController {
                 result.add(map);
             }
         }
-        
+
         result.sort((c1, c2) -> ((LocalDateTime) c2.get("lastMessageTime")).compareTo((LocalDateTime) c1.get("lastMessageTime")));
-        
+
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/conversations/{conversationId}/read")
     public ResponseEntity<?> markConversationAsRead(@PathVariable String conversationId, Authentication authentication) {
         String currentUserId = getCurrentUser(authentication).getId();
-        List<Message> messages = messageRepository.findByConversationId(conversationId);
-        
-        boolean updated = false;
-        for (Message message : messages) {
-            if (!message.getSenderId().equals(currentUserId) && (message.getReadBy() == null || !message.getReadBy().contains(currentUserId))) {
-                if (message.getReadBy() == null) {
-                    message.setReadBy(new HashSet<>());
-                }
-                message.getReadBy().add(currentUserId);
-                messageRepository.save(message);
-                updated = true;
-            }
+        advanceReadCursor(conversationId, currentUserId);
+
+        // Bounded bulk update for the per-message read-receipt (double-checkmark) UI only -
+        // the unread badge itself now comes entirely from the cursor above, not this.
+        Query recentUnread = Query.query(Criteria.where("conversationId").is(conversationId)
+                .and("senderId").ne(currentUserId)
+                .and("readBy").ne(currentUserId))
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .limit(READ_RECEIPT_BULK_LIMIT);
+        List<Message> toMark = mongoTemplate.find(recentUnread, Message.class);
+        boolean updated = !toMark.isEmpty();
+        if (updated) {
+            List<String> ids = toMark.stream().map(Message::getId).collect(Collectors.toList());
+            mongoTemplate.updateMulti(
+                    Query.query(Criteria.where("id").in(ids)),
+                    new Update().addToSet("readBy", currentUserId),
+                    Message.class
+            );
         }
-        
+
         if (updated) {
             Map<String, Object> wsMsg = Map.of(
                 "type", "CONVERSATION_READ",
@@ -259,6 +335,18 @@ public class ChatController {
         }
 
         Channel updated = channelRepository.save(channel);
+
+        // Notify all channel members via WebSocket that the channel was updated
+        Map<String, Object> wsMsg = Map.of(
+            "type", "CHANNEL_UPDATED",
+            "channelId", updated.getId(),
+            "name", updated.getName(),
+            "description", updated.getDescription() == null ? "" : updated.getDescription(),
+            "channelType", updated.getType()
+        );
+        chatWebSocketHandler.broadcastToChannel(updated.getId(), wsMsg, null);
+        chatWebSocketHandler.sendMessageToUser(userId, wsMsg);
+
         return ResponseEntity.ok(updated);
     }
 
@@ -409,15 +497,23 @@ public class ChatController {
     }
 
     // Messages API
+    //
+    // Two modes on the same endpoint, both cursor-based (no offset pagination, so
+    // performance doesn't degrade as a conversation grows into the tens of thousands
+    // of messages):
+    //   - no `before`: initial load. Returns the last 70 already-read messages plus
+    //     every unread message (capped defensively), so a conversation you haven't
+    //     opened in a while doesn't force-load its entire history.
+    //   - `before=<ISO timestamp>`: infinite-scroll "load older", a plain bounded
+    //     page of messages strictly before that cursor.
     @GetMapping("/messages/{conversationId}")
-    public ResponseEntity<Page<Message>> getMessages(
+    public ResponseEntity<?> getMessages(
             @PathVariable String conversationId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String before,
             Authentication authentication) {
-        
+
         String userId = getCurrentUser(authentication).getId();
-        
+
         // Ensure user belongs to the conversation if it is a channel or a DM
         if (conversationId.contains("_")) {
             String[] parts = conversationId.split("_");
@@ -434,9 +530,53 @@ public class ChatController {
             }
         }
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<Message> messages = messageRepository.findByConversationIdAndDeletedForUsersNotContains(conversationId, userId, pageable);
-        return ResponseEntity.ok(messages);
+        if (before != null) {
+            LocalDateTime beforeTs = LocalDateTime.parse(before);
+            Query olderQuery = Query.query(Criteria.where("conversationId").is(conversationId)
+                    .and("createdAt").lt(beforeTs)
+                    .andOperator(notDeletedForUser(userId)))
+                    .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                    .limit(OLDER_PAGE_SIZE);
+            List<Message> older = mongoTemplate.find(olderQuery, Message.class);
+            Collections.reverse(older);
+
+            boolean hasMoreOlder = older.size() == OLDER_PAGE_SIZE;
+            String oldestCursor = older.isEmpty() ? before : older.get(0).getCreatedAt().toString();
+            return ResponseEntity.ok(new MessagePageResponse(older, oldestCursor, hasMoreOlder, null));
+        }
+
+        LocalDateTime lastReadAt = resolveLastReadAt(conversationId, userId);
+
+        Query unreadQuery = Query.query(Criteria.where("conversationId").is(conversationId)
+                .and("createdAt").gt(lastReadAt)
+                .andOperator(notDeletedForUser(userId)))
+                .with(Sort.by(Sort.Direction.ASC, "createdAt"))
+                .limit(UNREAD_SAFETY_CAP);
+        List<Message> unread = mongoTemplate.find(unreadQuery, Message.class);
+
+        Query readQuery = Query.query(Criteria.where("conversationId").is(conversationId)
+                .and("createdAt").lte(lastReadAt)
+                .andOperator(notDeletedForUser(userId)))
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .limit(INITIAL_READ_HISTORY_SIZE);
+        List<Message> readRecent = mongoTemplate.find(readQuery, Message.class);
+        Collections.reverse(readRecent);
+
+        List<Message> combined = new ArrayList<>(readRecent);
+        combined.addAll(unread);
+
+        String firstUnreadId = unread.isEmpty() ? null : unread.get(0).getId();
+        String oldestCursor;
+        if (!readRecent.isEmpty()) {
+            oldestCursor = readRecent.get(0).getCreatedAt().toString();
+        } else if (!unread.isEmpty()) {
+            oldestCursor = unread.get(0).getCreatedAt().toString();
+        } else {
+            oldestCursor = null;
+        }
+        boolean hasMoreOlder = readRecent.size() == INITIAL_READ_HISTORY_SIZE;
+
+        return ResponseEntity.ok(new MessagePageResponse(combined, oldestCursor, hasMoreOlder, firstUnreadId));
     }
 
     @PostMapping("/messages")
@@ -445,6 +585,10 @@ public class ChatController {
         message.setSenderId(userId);
         message.setCreatedAt(LocalDateTime.now());
         Message saved = messageRepository.save(message);
+
+        // Sending a message implies you've seen everything up to it - advances your own
+        // cursor so your own just-sent messages never count toward your own unread badge.
+        advanceReadCursor(saved.getConversationId(), userId);
 
         // Deliver message in real time
         Map<String, Object> wsMsg = Map.of(
