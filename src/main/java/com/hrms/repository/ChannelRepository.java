@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ChannelRepository extends MongoRepository<Channel, String> {
     List<Channel> findByType(String type);
+    java.util.Optional<Channel> findByName(String name);
 }

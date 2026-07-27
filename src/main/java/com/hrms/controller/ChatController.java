@@ -327,7 +327,32 @@ public class ChatController {
         }
 
         Channel channel = channelOpt.get();
-        channel.setName(channelDetails.getName());
+        if (channelDetails.getName() == null || channelDetails.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Channel name is required");
+        }
+        String newName = channelDetails.getName().trim();
+        if (!channel.getName().equals(newName)) {
+            Optional<Channel> existingWithSameName = channelRepository.findByName(newName);
+            if (existingWithSameName.isPresent()) {
+                return ResponseEntity.badRequest().body("Channel name must be unique within the organization");
+            }
+            
+            // Insert system message for rename
+            Message systemMsg = Message.builder()
+                .conversationId(id)
+                .senderId("system")
+                .message("Channel name changed from \"" + channel.getName() + "\" to \"" + newName + "\"")
+                .messageType("SYSTEM")
+                .createdAt(LocalDateTime.now())
+                .build();
+            Message savedMsg = messageRepository.save(systemMsg);
+            
+            // Broadcast system message
+            chatWebSocketHandler.broadcastToChannel(id, Map.of("type", "CHAT_MESSAGE", "message", savedMsg), null);
+            
+            channel.setName(newName);
+        }
+
         channel.setDescription(channelDetails.getDescription());
         channel.setType(channelDetails.getType());
         if (channelDetails.getAvatar() != null) {
@@ -366,6 +391,16 @@ public class ChatController {
 
         if (!isCreatorOrAdmin && !hasPrivilege) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only channel admins can delete this channel");
+        }
+
+        // Broadcast CHANNEL_DELETED to all members of the channel before removing them from db
+        List<ChannelMember> members = channelMemberRepository.findByChannelId(id);
+        Map<String, Object> wsMsg = Map.of(
+            "type", "CHANNEL_DELETED",
+            "channelId", id
+        );
+        for (ChannelMember cm : members) {
+            chatWebSocketHandler.sendMessageToUser(cm.getUserId(), wsMsg);
         }
 
         channelRepository.deleteById(id);
@@ -415,33 +450,66 @@ public class ChatController {
     }
 
     @PostMapping("/channels/{id}/members")
-    public ResponseEntity<?> addMemberToChannel(@PathVariable String id, @RequestBody Map<String, String> payload, Authentication authentication) {
-        String targetUserId = payload.get("userId");
-        if (targetUserId == null) {
-            return ResponseEntity.badRequest().body("userId is required");
+    public ResponseEntity<?> addMemberToChannel(@PathVariable String id, @RequestBody Map<String, Object> payload, Authentication authentication) {
+        String currentUserId = getCurrentUser(authentication).getId();
+        Employee currentUser = employeeRepository.findById(currentUserId).orElse(null);
+        String currentUserName = currentUser != null ? (currentUser.getFirstName() + " " + currentUser.getLastName()) : "User";
+
+        List<String> targetUserIds = new ArrayList<>();
+        if (payload.containsKey("userIds")) {
+            targetUserIds = (List<String>) payload.get("userIds");
+        } else if (payload.containsKey("userId")) {
+            targetUserIds.add((String) payload.get("userId"));
         }
 
-        if (channelMemberRepository.existsByChannelIdAndUserId(id, targetUserId)) {
-            return ResponseEntity.badRequest().body("User is already a member of this channel");
+        if (targetUserIds.isEmpty()) {
+            return ResponseEntity.badRequest().body("userId or userIds is required");
         }
 
-        ChannelMember member = ChannelMember.builder()
-                .channelId(id)
-                .userId(targetUserId)
-                .role("MEMBER")
-                .joinedAt(LocalDateTime.now())
+        List<ChannelMember> createdMembers = new ArrayList<>();
+        for (String targetUserId : targetUserIds) {
+            if (channelMemberRepository.existsByChannelIdAndUserId(id, targetUserId)) {
+                continue;
+            }
+
+            ChannelMember member = ChannelMember.builder()
+                    .channelId(id)
+                    .userId(targetUserId)
+                    .role("MEMBER")
+                    .joinedAt(LocalDateTime.now())
+                    .build();
+            channelMemberRepository.save(member);
+            createdMembers.add(member);
+
+            Employee targetUser = employeeRepository.findById(targetUserId).orElse(null);
+            String targetUserName = targetUser != null ? (targetUser.getFirstName() + " " + targetUser.getLastName()) : "User";
+
+            // Insert system message: {John Smith} added {Emily Johnson} to the channel
+            Message systemMsg = Message.builder()
+                .conversationId(id)
+                .senderId("system")
+                .message(currentUserName + " added " + targetUserName + " to the channel")
+                .messageType("SYSTEM")
+                .createdAt(LocalDateTime.now())
                 .build();
-        channelMemberRepository.save(member);
+            Message savedMsg = messageRepository.save(systemMsg);
 
-        // Notify member
-        Map<String, Object> wsMsg = Map.of(
-            "type", "CHANNEL_INVITATION",
-            "channelId", id,
-            "inviterId", getCurrentUser(authentication).getId()
-        );
-        chatWebSocketHandler.sendMessageToUser(targetUserId, wsMsg);
+            // Broadcast new system message to existing members
+            chatWebSocketHandler.broadcastToChannel(id, Map.of("type", "CHAT_MESSAGE", "message", savedMsg), null);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(member);
+            // Send real-time notification to the newly added member
+            Map<String, Object> wsMsg = Map.of(
+                "type", "CHANNEL_INVITATION",
+                "channelId", id,
+                "inviterId", currentUserId
+            );
+            chatWebSocketHandler.sendMessageToUser(targetUserId, wsMsg);
+        }
+
+        // Broadcast member list update to everyone in the channel
+        chatWebSocketHandler.broadcastToChannel(id, Map.of("type", "CHANNEL_MEMBERS_UPDATED", "channelId", id), null);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdMembers);
     }
 
     @DeleteMapping("/channels/{id}/members/{userId}")
@@ -457,7 +525,41 @@ public class ChatController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only channel admins can remove members");
         }
 
+        Optional<ChannelMember> targetMembership = channelMemberRepository.findByChannelIdAndUserId(id, userId);
+        if (targetMembership.isEmpty()) {
+            return ResponseEntity.badRequest().body("User is not a member of this channel");
+        }
+
+        // Prevent removing the last admin/owner
+        if ("ADMIN".equalsIgnoreCase(targetMembership.get().getRole())) {
+            List<ChannelMember> allMembers = channelMemberRepository.findByChannelId(id);
+            if (allMembers.size() > 1) {
+                long adminCount = allMembers.stream().filter(m -> "ADMIN".equalsIgnoreCase(m.getRole())).count();
+                if (adminCount <= 1) {
+                    return ResponseEntity.badRequest().body("Cannot remove or leave as the last administrator. Assign another administrator first.");
+                }
+            }
+        }
+
         channelMemberRepository.deleteByChannelIdAndUserId(id, userId);
+
+        Employee currentUser = employeeRepository.findById(currentUserId).orElse(null);
+        String currentUserName = currentUser != null ? (currentUser.getFirstName() + " " + currentUser.getLastName()) : "User";
+        Employee targetUser = employeeRepository.findById(userId).orElse(null);
+        String targetUserName = targetUser != null ? (targetUser.getFirstName() + " " + targetUser.getLastName()) : "User";
+
+        String sysMessageContent = isSelf 
+            ? targetUserName + " left the channel" 
+            : currentUserName + " removed " + targetUserName + " from the channel";
+
+        Message systemMsg = Message.builder()
+            .conversationId(id)
+            .senderId("system")
+            .message(sysMessageContent)
+            .messageType("SYSTEM")
+            .createdAt(LocalDateTime.now())
+            .build();
+        Message savedMsg = messageRepository.save(systemMsg);
 
         // Notify user
         Map<String, Object> wsMsg = Map.of(
@@ -466,6 +568,10 @@ public class ChatController {
             "removedBy", currentUserId
         );
         chatWebSocketHandler.sendMessageToUser(userId, wsMsg);
+
+        // Broadcast system message & members updated event to remaining members
+        chatWebSocketHandler.broadcastToChannel(id, Map.of("type", "CHAT_MESSAGE", "message", savedMsg), null);
+        chatWebSocketHandler.broadcastToChannel(id, Map.of("type", "CHANNEL_MEMBERS_UPDATED", "channelId", id), null);
 
         return ResponseEntity.noContent().build();
     }
