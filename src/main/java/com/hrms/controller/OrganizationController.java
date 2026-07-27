@@ -34,7 +34,7 @@ public class OrganizationController {
 
     @GetMapping("/tree")
     public ResponseEntity<List<OrgTreeNodeDto>> getOrganizationTree() {
-        List<Employee> allEmployees = employeeRepository.findAll();
+        List<Employee> allEmployees = employeeRepository.findAllActive();
         Map<String, String> deptMap = departmentRepository.findAll().stream()
                 .collect(Collectors.toMap(Department::getId, Department::getName, (a, b) -> a));
         Map<String, String> desigMap = designationRepository.findAll().stream()

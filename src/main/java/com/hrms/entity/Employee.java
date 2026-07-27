@@ -54,6 +54,9 @@ public class Employee {
     private Boolean isFirstLogin = true;
     
     @Builder.Default
+    private Boolean deleted = false;
+    
+    @Builder.Default
     private java.util.Set<ERole> roles = new java.util.HashSet<>();
 
     public Boolean getIsFirstLogin() {

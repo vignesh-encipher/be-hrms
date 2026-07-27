@@ -49,6 +49,12 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        // Check if database is already seeded
+        if (employeeRepository.count() > 0) {
+            System.out.println("Database already seeded with employees. Skipping seed.");
+            return;
+        }
+
         // Clear ALL existing collections in MongoDB database
         employeeRepository.deleteAll();
         departmentRepository.deleteAll();

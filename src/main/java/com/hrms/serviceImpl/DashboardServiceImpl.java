@@ -37,14 +37,14 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardStatsDto getDashboardStats() {
         LocalDate today = LocalDate.now();
 
-        long totalEmployees = employeeRepository.count();
+        long totalEmployees = employeeRepository.countActive();
         long presentToday = attendanceRepository.countByDateAndStatus(today, "Present");
         long absentToday = attendanceRepository.countByDateAndStatus(today, "Absent");
         long pendingLeaves = leaveRequestRepository.countByStatus("Pending");
         long departmentsCount = departmentRepository.count();
 
         // Calculate upcoming birthdays
-        List<Employee> allEmployees = employeeRepository.findAll();
+        List<Employee> allEmployees = employeeRepository.findAllActive();
         List<Map<String, Object>> upcomingBirthdays = new ArrayList<>();
         for (Employee emp : allEmployees) {
             if (emp.getDob() != null) {

@@ -114,14 +114,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (search != null && !search.isEmpty()) {
             page = employeeRepository.searchEmployees(search, pageable);
         } else {
-            page = employeeRepository.findAll(pageable);
+            page = employeeRepository.findAllActive(pageable);
         }
         return page.map(this::convertToDto);
     }
 
     @Override
     public List<EmployeeDto> getAllEmployeesList() {
-        return employeeRepository.findAll().stream()
+        return employeeRepository.findAllActive().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -130,6 +130,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto getEmployeeById(String id) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        if (Boolean.TRUE.equals(employee.getDeleted())) {
+            throw new ResourceNotFoundException("Employee not found with id: " + id);
+        }
         return convertToDto(employee);
     }
 
@@ -144,6 +147,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto getEmployeeByUserId(String userId) {
         Employee employee = employeeRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + userId));
+        if (Boolean.TRUE.equals(employee.getDeleted())) {
+            throw new ResourceNotFoundException("Employee not found with id: " + userId);
+        }
         return convertToDto(employee);
     }
 
@@ -267,7 +273,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     public void deleteEmployee(String id) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
-        employeeRepository.delete(employee);
+        employee.setDeleted(true);
+        employeeRepository.save(employee);
     }
 
     @Override
