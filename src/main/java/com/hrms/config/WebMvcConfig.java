@@ -23,5 +23,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         
         registry.addResourceHandler("/chat/files/**")
                 .addResourceLocations("file:" + uploadPath + "/");
+
+        registry.addResourceHandler("/reimbursements/files/**")
+                .addResourceLocations("file:" + uploadPath + "/");
     }
 }
