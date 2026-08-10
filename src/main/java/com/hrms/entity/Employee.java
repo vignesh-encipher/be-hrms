@@ -37,6 +37,7 @@ public class Employee {
     private String designationId;
     private String managerId; // employeeId of manager
     private String hrApproverId; // employeeId of HR approver
+    private String shiftId; // Shift.id; falls back to the General shift when null
 
     private LocalDate joiningDate;
     private LocalDate resignationDate;

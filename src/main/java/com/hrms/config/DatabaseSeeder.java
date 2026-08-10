@@ -45,6 +45,12 @@ public class DatabaseSeeder implements CommandLineRunner {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    private ShiftRepository shiftRepository;
+
+    @Autowired
+    private com.hrms.repository.WorkCalendarRuleRepository workCalendarRuleRepository;
+
+    @Autowired
     private PasswordEncoder encoder;
 
     @Override
@@ -66,6 +72,25 @@ public class DatabaseSeeder implements CommandLineRunner {
         compOffRepository.deleteAll();
         payrollRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        shiftRepository.deleteAll();
+        workCalendarRuleRepository.deleteAll();
+
+        // 0. Seed default Shifts
+        Shift generalShift = shiftRepository.save(Shift.builder()
+                .name("General")
+                .startTime(java.time.LocalTime.of(9, 0))
+                .endTime(java.time.LocalTime.of(18, 0))
+                .build());
+        shiftRepository.save(Shift.builder()
+                .name("Morning")
+                .startTime(java.time.LocalTime.of(6, 0))
+                .endTime(java.time.LocalTime.of(15, 0))
+                .build());
+        shiftRepository.save(Shift.builder()
+                .name("Evening")
+                .startTime(java.time.LocalTime.of(14, 0))
+                .endTime(java.time.LocalTime.of(23, 0))
+                .build());
 
         // 1. Seed Departments & Designations
         Department eng = departmentRepository
@@ -164,5 +189,26 @@ public class DatabaseSeeder implements CommandLineRunner {
                 Holiday.builder().name("Independence Day").date(LocalDate.of(2026, 7, 4)).isrestricted(false).build());
         holidayRepository.save(
                 Holiday.builder().name("Christmas Day").date(LocalDate.of(2026, 12, 25)).isrestricted(false).build());
+
+        // 7. Seed default ORGANIZATION-scope Work Calendar rule (Mon-Sat working, Sunday
+        // off) so the system isn't relying purely on the in-code SYSTEM_DEFAULT fallback
+        // in WorkCalendarServiceImpl. effectiveFrom is set safely in the past.
+        java.util.Map<Integer, String> defaultWeeklyPattern = new java.util.LinkedHashMap<>();
+        defaultWeeklyPattern.put(0, "OFF");    // Sunday
+        defaultWeeklyPattern.put(1, "WORKING");
+        defaultWeeklyPattern.put(2, "WORKING");
+        defaultWeeklyPattern.put(3, "WORKING");
+        defaultWeeklyPattern.put(4, "WORKING");
+        defaultWeeklyPattern.put(5, "WORKING");
+        defaultWeeklyPattern.put(6, "WORKING"); // Saturday
+        workCalendarRuleRepository.save(WorkCalendarRule.builder()
+                .scope("ORGANIZATION")
+                .scopeRefId(null)
+                .weeklyPattern(defaultWeeklyPattern)
+                .effectiveFrom(LocalDate.of(2020, 1, 1))
+                .createdBy("SYSTEM")
+                .createdAt(java.time.LocalDateTime.now())
+                .active(true)
+                .build());
     }
 }

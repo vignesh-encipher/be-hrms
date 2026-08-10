@@ -1,18 +1,24 @@
 package com.hrms.serviceImpl;
 
 import com.hrms.entity.Attendance;
+import com.hrms.entity.AttendanceAuditLog;
+import com.hrms.entity.AttendanceSession;
 import com.hrms.entity.Employee;
 import com.hrms.entity.RegularizationRequest;
+import com.hrms.entity.Shift;
 import com.hrms.exception.BadRequestException;
 import com.hrms.exception.ResourceNotFoundException;
+import com.hrms.repository.AttendanceAuditLogRepository;
 import com.hrms.repository.AttendanceRepository;
 import com.hrms.repository.EmployeeRepository;
 import com.hrms.repository.RegularizationRepository;
+import com.hrms.service.AttendanceService;
 import com.hrms.service.RegularizationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +33,12 @@ public class RegularizationServiceImpl implements RegularizationService {
 
     @Autowired
     private AttendanceRepository attendanceRepository;
+
+    @Autowired
+    private AttendanceService attendanceService;
+
+    @Autowired
+    private AttendanceAuditLogRepository attendanceAuditLogRepository;
 
     @Override
     public RegularizationRequest apply(RegularizationRequest request) {
@@ -80,29 +92,45 @@ public class RegularizationServiceImpl implements RegularizationService {
         request.setApprovedOrRejectedOn(LocalDateTime.now());
         request.setRemarks(remarks);
 
-        // Update or create Attendance record
-        List<Attendance> existingAttendance = attendanceRepository.findByEmployeeIdAndDate(
+        // Get-or-create the day's Attendance doc (new session-based model).
+        Optional<Attendance> existingAttendance = attendanceRepository.findByEmployeeIdAndDate(
                 request.getEmployeeId(), request.getAttendanceDate()
         );
 
-        Attendance attendance;
-        if (existingAttendance.isEmpty()) {
-            attendance = Attendance.builder()
-                    .employeeId(request.getEmployeeId())
-                    .date(request.getAttendanceDate())
-                    .build();
-        } else {
-            attendance = existingAttendance.get(0);
+        Shift shift = attendanceService.resolveShift(request.getEmployeeId());
+
+        Attendance attendance = existingAttendance.orElseGet(() -> Attendance.builder()
+                .employeeId(request.getEmployeeId())
+                .date(request.getAttendanceDate())
+                .shiftId(shift.getId())
+                .sessions(new ArrayList<>())
+                .breaks(new ArrayList<>())
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        String previousValue = "sessions=" + attendance.getSessions();
+
+        // The regularization corrects the day to a single session spanning
+        // checkInTime -> checkOutTime; replace whatever sessions existed with it.
+        LocalDateTime correctedCheckIn = request.getCheckInTime() != null
+                ? LocalDateTime.of(request.getAttendanceDate(), request.getCheckInTime()) : null;
+        LocalDateTime correctedCheckOut = request.getCheckOutTime() != null
+                ? LocalDateTime.of(request.getAttendanceDate(), request.getCheckOutTime()) : null;
+
+        attendance.setSessions(new ArrayList<>());
+        if (correctedCheckIn != null) {
+            attendance.getSessions().add(AttendanceSession.builder()
+                    .checkIn(correctedCheckIn)
+                    .checkOut(correctedCheckOut)
+                    .build());
         }
 
-        attendance.setClockIn(request.getCheckInTime());
-        attendance.setClockOut(request.getCheckOutTime());
-        
-        // Map status based on request type
+        // Reuse the same aggregate recomputation logic as checkOut().
+        attendanceService.recomputeAggregates(attendance, shift);
+
+        // Half Day regularizations override the computed status explicitly.
         if ("Half Day Regularization".equalsIgnoreCase(request.getRequestType())) {
-            attendance.setStatus("Half Day");
-        } else {
-            attendance.setStatus("Present");
+            attendance.setStatus("HalfDay");
         }
 
         String attendanceRemarks = "Regularized: " + request.getReason();
@@ -110,17 +138,21 @@ public class RegularizationServiceImpl implements RegularizationService {
             attendanceRemarks += " (Manager comment: " + remarks + ")";
         }
         attendance.setRemarks(attendanceRemarks);
+        attendance.setUpdatedAt(LocalDateTime.now());
 
-        attendanceRepository.save(attendance);
-        
-        // If there are other attendance chunks for this date, align their status to Present/Half Day as well
-        if (existingAttendance.size() > 1) {
-            for (int i = 1; i < existingAttendance.size(); i++) {
-                Attendance extra = existingAttendance.get(i);
-                extra.setStatus(attendance.getStatus());
-                attendanceRepository.save(extra);
-            }
-        }
+        Attendance savedAttendance = attendanceRepository.save(attendance);
+
+        String newValue = "sessions=" + savedAttendance.getSessions();
+        attendanceAuditLogRepository.save(AttendanceAuditLog.builder()
+                .employeeId(request.getEmployeeId())
+                .attendanceId(savedAttendance.getId())
+                .action("CORRECTION_APPROVED")
+                .timestamp(LocalDateTime.now())
+                .previousValue(previousValue)
+                .newValue(newValue)
+                .reason(request.getReason())
+                .performedBy(managerName)
+                .build());
 
         return regularizationRepository.save(request);
     }
@@ -148,6 +180,15 @@ public class RegularizationServiceImpl implements RegularizationService {
         request.setApproverName(managerName);
         request.setApprovedOrRejectedOn(LocalDateTime.now());
         request.setRemarks(remarks);
+
+        attendanceAuditLogRepository.save(AttendanceAuditLog.builder()
+                .employeeId(request.getEmployeeId())
+                .attendanceId(null)
+                .action("CORRECTION_REJECTED")
+                .timestamp(LocalDateTime.now())
+                .reason(request.getReason())
+                .performedBy(managerName)
+                .build());
 
         return regularizationRepository.save(request);
     }

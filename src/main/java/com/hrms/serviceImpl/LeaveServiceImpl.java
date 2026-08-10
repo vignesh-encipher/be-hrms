@@ -9,12 +9,13 @@ import com.hrms.repository.EmployeeRepository;
 import com.hrms.repository.LeaveRequestRepository;
 import com.hrms.repository.CompOffRepository;
 import com.hrms.service.LeaveService;
+import com.hrms.service.WorkCalendarService;
+import com.hrms.dto.DayTypeResultDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,9 @@ public class LeaveServiceImpl implements LeaveService {
 
     @Autowired
     private CompOffRepository compOffRepository;
+
+    @Autowired
+    private WorkCalendarService workCalendarService;
 
     @Override
     public LeaveRequest applyLeave(LeaveRequest leaveRequest) {
@@ -54,8 +58,19 @@ public class LeaveServiceImpl implements LeaveService {
                 }
             }
         }
-        long days = ChronoUnit.DAYS.between(leaveRequest.getStartDate(), leaveRequest.getEndDate()) + 1;
-        leaveRequest.setNumberOfDays((double) days);
+        // Count only days the employee's work calendar marks as WORKING or SPECIAL_WORKING_DAY —
+        // weekly-offs and public holidays inside the range don't consume leave balance.
+        double days = 0;
+        for (LocalDate d = leaveRequest.getStartDate(); !d.isAfter(leaveRequest.getEndDate()); d = d.plusDays(1)) {
+            DayTypeResultDto dayType = workCalendarService.resolveDayType(leaveRequest.getEmployeeId(), d);
+            if ("WORKING".equals(dayType.getDayType()) || "SPECIAL_WORKING_DAY".equals(dayType.getDayType())) {
+                days += 1;
+            }
+        }
+        if (days == 0) {
+            throw new BadRequestException("The selected date range contains no working days per the work calendar — nothing to apply leave for.");
+        }
+        leaveRequest.setNumberOfDays(days);
 
         // Fetch remaining leave balance and subtract any pending requests of same type
         Map<String, Double> balances = getLeaveBalance(leaveRequest.getEmployeeId());
